@@ -241,10 +241,10 @@ def parse_raw_data(df, breakdown):
                         (df[std_col.STATE_NAME_COL] == state) &
                         (df['Measure Name'] == measure_name)]
 
-                    # BY AGE voter participation is avg of pres and midterm
+                    # BY AGE voter participation is value of pres
                     if determinant in AVERAGED_DETERMINANTS and breakdown == std_col.AGE_COL:
                         if len(matched_row) > 0:
-                            output_row[per_100k_col_name] = matched_row['Value'].values[0] * 1000
+                            output_row[per_100k_col_name] = matched_row['Value'].values[0] * 10
 
                     # for other determinants besides VOTER
                     elif len(matched_row) > 0:
@@ -263,7 +263,7 @@ def parse_raw_data(df, breakdown):
 
     if breakdown == std_col.RACE_OR_HISPANIC_COL:
         std_col.add_race_columns_from_category_id(output_df)
-
+    print(output_df)
     return output_df
 
 
