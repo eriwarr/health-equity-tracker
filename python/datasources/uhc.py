@@ -42,7 +42,8 @@ VOTER_AGE_GROUPS = [
     '18-24 ',  # NOTE csv has typo extra space which we remove later
     '25-34',
     '35-44',
-    '45-64']
+    '45-64',
+]
 
 # single list of all unique age group options
 UHC_AGE_GROUPS = list(dict.fromkeys([
@@ -150,6 +151,7 @@ class UHCData(DataSource):
             if geo == 'national':
                 loc_df = loc_df.loc[loc_df[std_col.STATE_NAME_COL]
                                     == constants.US_NAME]
+
             else:
                 loc_df = loc_df.loc[loc_df[std_col.STATE_NAME_COL]
                                     != constants.US_NAME]
@@ -244,10 +246,14 @@ def parse_raw_data(df, breakdown):
                     # BY AGE voter participation is value of pres
                     if determinant in AVERAGED_DETERMINANTS and breakdown == std_col.AGE_COL:
                         if len(matched_row) > 0:
-                            output_row[per_100k_col_name] = matched_row['Value'].values[0] * 10
+                            output_row[per_100k_col_name] = matched_row['Value'].values[0] * 1000
+
+                        else:
+                            output_row[per_100k_col_name] = 0
 
                     # for other determinants besides VOTER
                     elif len(matched_row) > 0:
+
                         pct = matched_row['Value'].values[0]
                         if pct:
                             if determinant in PER100K_DETERMINANTS:
@@ -260,10 +266,9 @@ def parse_raw_data(df, breakdown):
             output.append(output_row)
 
     output_df = pd.DataFrame(output)
-
+    print(output_df)
     if breakdown == std_col.RACE_OR_HISPANIC_COL:
         std_col.add_race_columns_from_category_id(output_df)
-    print(output_df)
     return output_df
 
 
