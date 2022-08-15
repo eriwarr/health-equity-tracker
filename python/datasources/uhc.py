@@ -1,3 +1,4 @@
+from nis import match
 import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
 
@@ -245,11 +246,12 @@ def parse_raw_data(df, breakdown):
 
                     # BY AGE voter participation is value of pres
                     if determinant in AVERAGED_DETERMINANTS and breakdown == std_col.AGE_COL:
-                        if len(matched_row) > 0:
-                            output_row[per_100k_col_name] = matched_row['Value'].values[0] * 1000
+                        if breakdown_value in VOTER_AGE_GROUPS or breakdown_value == "65+":
+                            if len(matched_row) > 0:
+                                output_row[per_100k_col_name] = matched_row['Value'].values[0] * 1000
 
-                        else:
-                            output_row[per_100k_col_name] = 0
+                            else:
+                                output_row[per_100k_col_name] = 0
 
                     # for other determinants besides VOTER
                     elif len(matched_row) > 0:
@@ -266,7 +268,7 @@ def parse_raw_data(df, breakdown):
             output.append(output_row)
 
     output_df = pd.DataFrame(output)
-    print(output_df)
+
     if breakdown == std_col.RACE_OR_HISPANIC_COL:
         std_col.add_race_columns_from_category_id(output_df)
     return output_df
