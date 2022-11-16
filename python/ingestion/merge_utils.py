@@ -117,7 +117,7 @@ def merge_pop_numbers(df, demo, loc):
       df: a pandas df with demographic (race, sex, or age) and a `state_fips` column
       demo: the demographic in the df, either `age`, `race`, or `sex`
       loc: the location level for the df, either `state` or `national`"""
-    return _merge_pop(df, demo, loc)
+    return _merge_18_pop(df, demo, loc)
 
 
 def merge_multiple_pop_cols(df, demo, pop_cols):
@@ -163,7 +163,8 @@ def _merge_pop(df, demo, loc):
     pop_df = gcs_to_bq_util.load_df_from_bigquery(
         'acs_population', pop_table_name, pop_dtype)
 
-    needed_cols = [on_col_map[demo], std_col.POPULATION_COL, std_col.POPULATION_PCT_COL]
+    needed_cols = [on_col_map[demo],
+                   std_col.POPULATION_COL, std_col.POPULATION_PCT_COL]
 
     if std_col.STATE_FIPS_COL in df.columns:
         needed_cols.append(std_col.STATE_FIPS_COL)
@@ -184,6 +185,70 @@ def _merge_pop(df, demo, loc):
                                    std_col.POPULATION_COL, std_col.POPULATION_PCT_COL]]
 
         pop_df = pd.concat([pop_df, pop_2010_df])
+
+        pop_df = pop_df.sort_values(std_col.STATE_FIPS_COL)
+
+    on_cols = [on_col_map[demo]]
+    if std_col.STATE_FIPS_COL in df.columns:
+        on_cols.append(std_col.STATE_FIPS_COL)
+
+    if loc == 'county':
+        on_cols.append(std_col.COUNTY_FIPS_COL)
+
+    df = pd.merge(df, pop_df, how='left', on=on_cols)
+
+    return df.reset_index(drop=True)
+
+
+def _merge_18_pop(df, demo, loc):
+    on_col_map = {
+        'age': std_col.AGE_COL,
+        'race': std_col.RACE_CATEGORY_ID_COL,
+        'sex': std_col.SEX_COL,
+    }
+
+    pop_dtype = {std_col.STATE_FIPS_COL: str,
+                 std_col.POPULATION_COL: float,
+                 std_col.POPULATION_PCT_COL: float}
+
+    if demo not in on_col_map:
+        raise ValueError('%s not a demographic option, must be one of: %s' % (
+            demo, list(on_col_map.keys())))
+
+    verbose_demo = "race_and_ethnicity" if demo == 'race' else demo
+
+    pop_table_name = f'by_{demo}_{loc}'
+
+    # all states, DC, PR
+    if demo == 'race' and (loc == 'state' or loc == 'county'):
+        pop_table_name += '_std'
+
+    pop_df = gcs_to_bq_util.load_df_from_bigquery(
+        'census_pop_estimates_sc', pop_table_name, pop_dtype)
+
+    needed_cols = [on_col_map[demo],
+                   std_col.POPULATION_COL, std_col.POPULATION_PCT_COL]
+
+    if std_col.STATE_FIPS_COL in df.columns:
+        needed_cols.append(std_col.STATE_FIPS_COL)
+
+    if loc == 'county':
+        needed_cols.append(std_col.COUNTY_FIPS_COL)
+
+    pop_df = pop_df[needed_cols]
+
+    # other territories from ACS 2010 (VI, GU, AS, MP)
+    if loc == 'state':
+        verbose_demo = "race_and_ethnicity" if demo == 'race' else demo
+        pop_2010_table_name = f'by_{verbose_demo}_territory'
+
+        pop_2010_df = gcs_to_bq_util.load_df_from_bigquery(
+            'acs_2010_population', pop_2010_table_name, pop_dtype)
+        pop_2010_df = pop_2010_df[[std_col.STATE_FIPS_COL, on_col_map[demo],
+                                   std_col.POPULATION_COL, std_col.POPULATION_PCT_COL]]
+
+        pop_df = pd.concat([pop_df, pop_2010_df])
+
         pop_df = pop_df.sort_values(std_col.STATE_FIPS_COL)
 
     on_cols = [on_col_map[demo]]

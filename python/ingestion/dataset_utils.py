@@ -75,14 +75,17 @@ def generate_pct_share_col_with_unknowns(df, raw_count_to_pct_share,
     df = df.loc[df[breakdown_col] != all_val]
 
     for share_of_known_col in raw_count_to_pct_share.values():
-        unknown_all_df.loc[unknown_all_df[breakdown_col] == all_val, share_of_known_col] = 100.0
+        unknown_all_df.loc[unknown_all_df[breakdown_col]
+                           == all_val, share_of_known_col] = 100.0
 
     df = pd.concat([df, unknown_all_df]).reset_index(drop=True)
     return df
 
 
 def _generate_pct_share_col(df, raw_count_to_pct_share, breakdown_col, all_val):
+
     def calc_pct_share(record, raw_count_col):
+
         return percent_avoid_rounding_to_zero(
             record[raw_count_col], record[f'{raw_count_col}_all'])
 
@@ -264,8 +267,10 @@ def generate_pct_relative_inequity_column(df, pct_share_col, pct_pop_col, pct_re
         if pd.isna(row[pct_share_col]) or pd.isna(row[pct_pop_col]) or (row[pct_pop_col] == 0):
             return np.NaN
 
-        pct_relative_inequity_ratio = (row[pct_share_col] - row[pct_pop_col]) / row[pct_pop_col]
+        pct_relative_inequity_ratio = (
+            row[pct_share_col] - row[pct_pop_col]) / row[pct_pop_col]
         return round(pct_relative_inequity_ratio * 100, 1)
 
-    df[pct_relative_inequity_col] = df.apply(calc_pct_relative_inequity, axis=1)
+    df[pct_relative_inequity_col] = df.apply(
+        calc_pct_relative_inequity, axis=1)
     return df

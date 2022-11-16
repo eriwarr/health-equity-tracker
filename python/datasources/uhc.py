@@ -275,6 +275,8 @@ def post_process(breakdown_df, breakdown, geo):
         breakdown_df[std_col.generate_column_name(determinant, 'estimated_total')] \
             = breakdown_df.apply(estimate_total, axis=1, args=(per_100k_col, ))
 
+    breakdown_df = merge_rawcount(breakdown_df)
+
     for determinant in UHC_DETERMINANTS.values():
         raw_count_col = std_col.generate_column_name(
             determinant, 'estimated_total')
@@ -287,11 +289,28 @@ def post_process(breakdown_df, breakdown, geo):
 
     # Suppress all pct share data for now
     for determinant in UHC_DETERMINANTS.values():
-        breakdown_df[std_col.generate_column_name(determinant, std_col.PCT_SHARE_SUFFIX)] = np.nan
+        breakdown_df[std_col.generate_column_name(
+            determinant, std_col.PCT_SHARE_SUFFIX)] = np.nan
 
     for determinant in UHC_DETERMINANTS.values():
         breakdown_df = breakdown_df.drop(
             columns=std_col.generate_column_name(determinant, 'estimated_total'))
 
     breakdown_df = breakdown_df.drop(columns=std_col.POPULATION_COL)
+
+
+def merge_rawcount(breakdown_df):
+
+    for col in breakdown_df.columns:
+        if col == 'race':
+            for col in breakdown_df.columns:
+                if '_estimated_total' in col:
+                    total = breakdown_df.loc[breakdown_df[std_col.RACE_CATEGORY_ID_COL]
+                                             != 'ALL', col].sum()
+
+                    breakdown_df.loc[breakdown_df[std_col.RACE_CATEGORY_ID_COL]
+                                     == 'ALL', col] = total
+        if col == 'age':
+            print(breakdown_df)
+
     return breakdown_df
