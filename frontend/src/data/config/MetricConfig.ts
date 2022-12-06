@@ -390,12 +390,12 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
         },
         per100k: {
           metricId: "covid_cases_per_100k",
+          trendsCardTitleName: "Monthly COVID-19 cases per 100k people",
           chartTitle: "COVID-19 cases since Jan 2020 per 100k people",
           mobileChartTitle: [
             "COVID-19 cases since Jan 2020",
             "per 100k people",
           ],
-          trendsCardTitleName: "Monthly COVID-19 cases per 100k people",
           columnTitleHeader: "Rates of COVID-19 cases",
           shortLabel: "cases per 100k",
           type: "per100k",
@@ -414,14 +414,13 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "COVID-19 deaths",
       variableDefinition: `The number of people who died due to COVID-19.`,
       timeSeriesData: true,
-
       metrics: {
         pct_share: {
           metricId: "covid_deaths_share",
           chartTitle: "Share of total COVID-19 deaths",
           columnTitleHeader: "Share of total COVID-19 deaths",
-          shortLabel: "% of COVID-19 deaths",
           unknownsVegaLabel: "% unknown",
+          shortLabel: "% of COVID-19 deaths",
           type: "pct_share",
           populationComparisonMetric: {
             chartTitle:
@@ -475,14 +474,13 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "COVID-19 hospitalizations",
       variableDefinition: `The number of people hospitalized at any point while ill with COVID-19.`,
       timeSeriesData: true,
-
       metrics: {
         pct_share: {
           metricId: "covid_hosp_share",
           chartTitle: "Share of total COVID-19 hospitalizations",
           columnTitleHeader: "Share of total COVID-19 hospitalizations",
-          shortLabel: "% of COVID-19 hospitalizations",
           unknownsVegaLabel: "% unknown",
+          shortLabel: "% of COVID-19 hospitalizations",
           type: "pct_share",
           populationComparisonMetric: {
             chartTitle:
@@ -520,13 +518,13 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
         },
         age_adjusted_ratio: {
           metricId: "hosp_ratio_age_adjusted",
-          shortLabel: "Risk of COVID-19 hospitalization", // Table header-row label
           chartTitle:
             "Age-adjusted risk of COVID-19 hospitalization compared to White (NH)",
           mobileChartTitle: [
             "Age-adjusted risk of COVID-19 hospitalization",
             "compared to White (NH)",
           ],
+          shortLabel: "Risk of COVID-19 hospitalization", // Table header-row label
           type: "ratio",
           ageAdjusted: true,
         },
@@ -541,35 +539,12 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "COVID-19 vaccinations",
       variableDefinition: `For the national level and most states this indicates people who have received at least one dose of a COVID-19 vaccine.`,
       metrics: {
-        per100k: {
-          metricId: "vaccinated_per_100k",
-          chartTitle: "COVID-19 vaccinations per 100k people",
-          mobileChartTitle: ["COVID-19 vaccinations", "per 100k people"],
-          trendsCardTitleName: "Rates of COVID-19 vaccinations over time",
-          columnTitleHeader: "COVID-19 vaccinations per 100k people",
-          shortLabel: "COVID-19 vaccinations per 100k",
-          type: "per100k",
-        },
-        age_adjusted_ratio: {
-          metricId: "vaccinated_ratio_age_adjusted",
-          chartTitle:
-            "Age-adjusted ratio of COVID-19 vaccination compared to White (NH)",
-          shortLabel: "",
-          type: "ratio",
-        },
-        pct_relative_inequity: {
-          metricId: "vaccinated_pct_relative_inequity",
-          chartTitle:
-            "historical data for inequitable distribution of COVID-19 vaccinations",
-          shortLabel: "% relative inequity",
-          type: "pct_relative_inequity",
-        },
         pct_share: {
           metricId: "vaccinated_pct_share",
-          chartTitle: "Share of total COVID-19 vaccinations",
-          columnTitleHeader: "Share of total COVID-19 vaccinations",
           trendsCardTitleName:
             "Inequitable share of COVID-19 vaccinations over time",
+          chartTitle: "Share of total COVID-19 vaccinations",
+          columnTitleHeader: "Share of total COVID-19 vaccinations",
           unknownsVegaLabel: "% unknown",
           shortLabel: "% of vaccinations",
           type: "pct_share",
@@ -598,6 +573,29 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
             type: "pct_share",
           },
         },
+        pct_relative_inequity: {
+          metricId: "vaccinated_pct_relative_inequity",
+          chartTitle:
+            "historical data for inequitable distribution of COVID-19 vaccinations",
+          shortLabel: "% relative inequity",
+          type: "pct_relative_inequity",
+        },
+        per100k: {
+          metricId: "vaccinated_per_100k",
+          trendsCardTitleName: "Rates of COVID-19 vaccinations over time",
+          chartTitle: "COVID-19 vaccinations per 100k people",
+          mobileChartTitle: ["COVID-19 vaccinations", "per 100k people"],
+          columnTitleHeader: "COVID-19 vaccinations per 100k people",
+          shortLabel: "COVID-19 vaccinations per 100k",
+          type: "per100k",
+        },
+        age_adjusted_ratio: {
+          metricId: "vaccinated_ratio_age_adjusted",
+          chartTitle:
+            "Age-adjusted ratio of COVID-19 vaccination compared to White (NH)",
+          shortLabel: "",
+          type: "ratio",
+        },
       },
     },
   ],
@@ -609,13 +607,12 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "Suicides",
       variableDefinition: `Deaths due to intentional self-harm.`,
       surveyCollectedData: true,
-
       metrics: {
         pct_share: {
           metricId: "suicide_pct_share",
+          trendsCardTitleName: "Inequitable share of suicide over time",
           chartTitle: "Share of total suicides",
           columnTitleHeader: "Share of total suicides",
-          trendsCardTitleName: "Inequitable share of suicide over time",
           shortLabel: "% of suicides",
           type: "pct_share",
           populationComparisonMetric: {
@@ -630,20 +627,20 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
             type: "pct_share",
           },
         },
-        per100k: {
-          metricId: "suicide_per_100k",
-          chartTitle: "Suicides per 100k people",
-          mobileChartTitle: ["Suicides", "per 100k people"],
-          trendsCardTitleName: "Rates of suicide over time",
-          columnTitleHeader: "Suicides per 100k people",
-          shortLabel: "suicides per 100k",
-          type: "per100k",
-        },
         pct_relative_inequity: {
           metricId: "suicide_pct_relative_inequity",
           chartTitle: "historical data for suicide inequity",
           shortLabel: "% relative inequity",
           type: "pct_relative_inequity",
+        },
+        per100k: {
+          metricId: "suicide_per_100k",
+          trendsCardTitleName: "Rates of suicide over time",
+          chartTitle: "Suicides per 100k people",
+          mobileChartTitle: ["Suicides", "per 100k people"],
+          columnTitleHeader: "Suicides per 100k people",
+          shortLabel: "suicides per 100k",
+          type: "per100k",
         },
         age_adjusted_ratio: {
           metricId: "suicide_ratio_age_adjusted",
@@ -661,7 +658,6 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "Depression cases",
       variableDefinition: `Adults who reported being told by a health professional that they have a depressive disorder including depression, major depression, minor depression or dysthymia.`,
       surveyCollectedData: true,
-
       metrics: {
         pct_share: {
           metricId: "depression_pct_share",
@@ -682,20 +678,20 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
             type: "pct_share",
           },
         },
-        per100k: {
-          metricId: "depression_per_100k",
-          chartTitle: "Cases of depression per 100k people",
-          mobileChartTitle: ["Cases of depression", "per 100k people"],
-          trendsCardTitleName: "Rates of depression over time",
-          columnTitleHeader: "Cases of depression per 100k people",
-          shortLabel: "cases of depression per 100k",
-          type: "per100k",
-        },
         pct_relative_inequity: {
           metricId: "depression_pct_relative_inequity",
           chartTitle: "historical data for depression inequity",
           shortLabel: "% relative inequity",
           type: "pct_relative_inequity",
+        },
+        per100k: {
+          metricId: "depression_per_100k",
+          trendsCardTitleName: "Rates of depression over time",
+          chartTitle: "Cases of depression per 100k people",
+          mobileChartTitle: ["Cases of depression", "per 100k people"],
+          columnTitleHeader: "Cases of depression per 100k people",
+          shortLabel: "cases of depression per 100k",
+          type: "per100k",
         },
         age_adjusted_ratio: {
           metricId: "depression_ratio_age_adjusted",
@@ -713,7 +709,6 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "Excessive drinking cases",
       variableDefinition: `Adults who reported binge drinking (four or more [females] or five or more [males] drinks on one occasion in the past 30 days) or heavy drinking (eight or more [females] or 15 or more [males] drinks per week).`,
       surveyCollectedData: true,
-
       metrics: {
         pct_share: {
           metricId: "excessive_drinking_pct_share",
@@ -736,20 +731,20 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
             type: "pct_share",
           },
         },
-        per100k: {
-          metricId: "excessive_drinking_per_100k",
-          chartTitle: "Excessive drinking cases per 100k people",
-          columnTitleHeader: "Excessive drinking cases per 100k people",
-          mobileChartTitle: ["Excessive drinking cases", "per 100k people"],
-          trendsCardTitleName: "Rates of excessive drinking over time",
-          shortLabel: "cases of excessive drinking per 100k",
-          type: "per100k",
-        },
         pct_relative_inequity: {
           metricId: "excessive_drinking_pct_relative_inequity",
           chartTitle: "historical data for inequity in excessive drinking",
           shortLabel: "% relative inequity",
           type: "pct_relative_inequity",
+        },
+        per100k: {
+          metricId: "excessive_drinking_per_100k",
+          trendsCardTitleName: "Rates of excessive drinking over time",
+          chartTitle: "Excessive drinking cases per 100k people",
+          columnTitleHeader: "Excessive drinking cases per 100k people",
+          mobileChartTitle: ["Excessive drinking cases", "per 100k people"],
+          shortLabel: "cases of excessive drinking per 100k",
+          type: "per100k",
         },
         age_adjusted_ratio: {
           metricId: "excessive_drinking_ratio_age_adjusted",
@@ -769,7 +764,6 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "Non-medical drug use",
       variableDefinition: `Adults who reported using prescription drugs non-medically (including pain relievers, stimulants, sedatives) or illicit drugs (excluding cannabis) in the last 12 months. Note: This data type includes both of the other opioid-related data types: “Non-medical use of prescription opioids” and “Use of Illicit opioids”.`,
       surveyCollectedData: true,
-
       metrics: {
         pct_share: {
           metricId: "non_medical_drug_use_pct_share",
@@ -792,20 +786,20 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
             type: "pct_share",
           },
         },
-        per100k: {
-          metricId: "non_medical_drug_use_per_100k",
-          chartTitle: "Non-medical drug use per 100k people",
-          columnTitleHeader: "Non-medical drug use per 100k people",
-          mobileChartTitle: ["Non-medical drug use", "per 100k people"],
-          trendsCardTitleName: "Rates of non-medical drug use over time",
-          shortLabel: "cases of non-medical drug use per 100k",
-          type: "per100k",
-        },
         pct_relative_inequity: {
           metricId: "non_medical_drug_use_pct_relative_inequity",
           chartTitle: "historical data for inequity in non-medical drug use",
           shortLabel: "% relative inequity",
           type: "pct_relative_inequity",
+        },
+        per100k: {
+          metricId: "non_medical_drug_use_per_100k",
+          trendsCardTitleName: "Rates of non-medical drug use over time",
+          chartTitle: "Non-medical drug use per 100k people",
+          mobileChartTitle: ["Non-medical drug use", "per 100k people"],
+          columnTitleHeader: "Non-medical drug use per 100k people",
+          shortLabel: "cases of non-medical drug use per 100k",
+          type: "per100k",
         },
         age_adjusted_ratio: {
           metricId: "non_medical_drug_use_ratio_age_adjusted",
@@ -822,7 +816,6 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
       variableFullDisplayName: "Non-medical prescription opioid use",
       variableDefinition: `Adults who reported using illicit opioids. Note: This is a subset of the “Non-medical drug use” data type.`,
       surveyCollectedData: true,
-
       metrics: {
         pct_share: {
           metricId: "non_medical_rx_opioid_use_pct_share",
@@ -846,8 +839,17 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
             type: "pct_share",
           },
         },
+        pct_relative_inequity: {
+          metricId: "non_medical_rx_opioid_use_pct_relative_inequity",
+          chartTitle:
+            "historical data for inequity in non-medical prescription opioid use",
+          shortLabel: "% relative inequity",
+          type: "pct_relative_inequity",
+        },
         per100k: {
           metricId: "non_medical_rx_opioid_use_per_100k",
+          trendsCardTitleName:
+            "Rates of non-medical prescription opioid use over time",
           chartTitle: "Non-medical prescription opioid use per 100k people",
           mobileChartTitle: [
             "Non-medical prescription opioid use",
@@ -855,17 +857,8 @@ export const METRIC_CONFIG: Record<DropdownVarId, VariableConfig[]> = {
           ],
           columnTitleHeader:
             "Non-medical prescription opioid use per 100k people",
-          trendsCardTitleName:
-            "Rates of non-medical prescription opioid use over time",
           shortLabel: "cases of non-medical rx opioid use per 100k",
           type: "per100k",
-        },
-        pct_relative_inequity: {
-          metricId: "non_medical_rx_opioid_use_pct_relative_inequity",
-          chartTitle:
-            "historical data for inequity in non-medical prescription opioid use",
-          shortLabel: "% relative inequity",
-          type: "pct_relative_inequity",
         },
         age_adjusted_ratio: {
           metricId: "non_medical_rx_opioid_use_ratio_age_adjusted",
