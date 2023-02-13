@@ -45,7 +45,7 @@ demo_dict = {
 
 pct_share_dict = {
     std_col.HIV_DIAGNOSES: std_col.HIV_DIAGNOSES_PCT_SHARE,
-    std_col.POPULATION_COL: std_col.HIV_POPULATION_PCT
+    std_col.POPULATION_COL: std_col.HIV_POPULATION_PCT,
 }
 
 
