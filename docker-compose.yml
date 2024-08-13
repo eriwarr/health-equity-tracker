@@ -1,0 +1,62 @@
+# services:
+#   postgres:
+#     image: postgres:9.6
+#     environment:
+#       - POSTGRES_USER=airflow
+#       - POSTGRES_PASSWORD=airflow
+#       - POSTGRES_DB=airflow
+#     logging:
+#       options:
+#         max-size: 10m
+#         max-file: "3"
+
+#   scheduler:
+#     image: apache/airflow:v1-10-stable-python3.6
+#     restart: always
+#     depends_on:
+#       - postgres
+#       - webserver
+#     env_file:
+#       - composer-local-dev/composer/local-data-ingestion-environment/variables.env
+#     ports:
+#       - "8793:8793"
+#     volumes:
+#       - ../dags:/opt/airflow/dags
+#       - ./airflow-logs:/opt/airflow/logs
+#     command: scheduler
+#     healthcheck:
+#       test:
+#         [
+#           "CMD-SHELL",
+#           "[ -f /user/local/airflow/airflow-webserver.pid ]"
+#         ]
+#       interval: 30s
+#       timeout: 30s
+#       retries: 3
+
+#   webserver:
+#     image: apache/airflow:v1-10-stable-python3.6
+#     hostname: webserver
+#     restart: always
+#     depends_on:
+#       - postgres
+#     env_file:
+#       - composer-local-dev/composer/local-data-ingestion-environment/variables.env
+#     volumes:
+#       - ../dags:/opt/airflow/dags
+#       - ./scripts:/opt/airflow/scripts
+#       - ./airflow-logs:/opt/airflow/logs
+#     ports:
+#       - "8080:8080"
+#     entrypoint: ./scripts/airflow-entrypoint.sh
+#     healthcheck:
+#       test:
+#         [
+#           "CMD-SHELL",
+#           "[ -f /user/local/airflow/airflow-webserver.pid ]"
+#         ]
+#       interval: 30s
+#       timeout: 30s
+#       retries: 32
+
+
