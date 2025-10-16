@@ -41,6 +41,7 @@ export const TOPIC_CATEGORIES_LINK = METHODOLOGY_PAGE_LINK + '/topic-categories'
 export const LIMITATIONS_LINK = METHODOLOGY_PAGE_LINK + '/limitations'
 export const BEHAVIORAL_HEALTH_LINK =
   TOPIC_CATEGORIES_LINK + '/behavioral-health'
+export const CANCER_LINK = '/cancer'
 export const CHRONIC_DISEASE_LINK = TOPIC_CATEGORIES_LINK + '/chronic-disease'
 export const COMMUNITY_SAFETY_LINK = TOPIC_CATEGORIES_LINK + '/community-safety'
 export const MATERNAL_HEALTH_LINK = TOPIC_CATEGORIES_LINK + '/maternal-health'

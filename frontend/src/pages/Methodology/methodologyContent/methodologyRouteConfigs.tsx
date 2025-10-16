@@ -30,6 +30,7 @@ const AgeAdjustmentLink = lazy(
 const BehavioralHealthLink = lazy(
   () => import('../methodologySections/BehavioralHealthLink'),
 )
+const _CancerLink = lazy(() => import('../methodologySections/CancerLink'))
 const ChronicDiseaseLink = lazy(
   () => import('../methodologySections/ChronicDiseaseLink'),
 )
@@ -165,6 +166,17 @@ export const methodologyRouteConfigs: RouteConfig[] = [
     ],
     visible: true,
   },
+  // {
+  //   label: 'Cancer',
+  //   path: CANCER_LINK,
+  //   component: <CancerLink />,
+  //   subLinks: [
+  //     { label: 'Data Sourcing', path: 'cancer-data-sourcing' },
+  //     { label: 'Data Sources', path: 'cancer-data-sources' },
+  //     { label: 'Key Terms', path: 'cancer-key-terms' },
+  //   ],
+  //   visible: true,
+  // },
   {
     label: 'Chronic Diseases',
     path: CHRONIC_DISEASE_LINK,
@@ -451,6 +463,7 @@ export const methodologyRouteConfigs: RouteConfig[] = [
     component: <TopicDefinitionsLink />,
     subLinks: [
       { label: 'HIV Topics', path: 'hiv' },
+      { label: 'Cancer Topics', path: 'cancer' },
       {
         label: 'Chronic Disease Topics',
         path: 'chronic-disease',

@@ -55,7 +55,7 @@ export const PHRMA_BRFSS_CANCER_SCREENING_METRICS: DataTypeConfig[] = [
     fullDisplayName: 'Breast cancer screening',
     surveyCollectedData: true,
     definition: {
-      text: ``,
+      text: `The number of women ages 50-74 who received a mammogram within a specific time period.`,
       citations: [
         {
           shortLabel: '',
@@ -131,10 +131,10 @@ export const PHRMA_BRFSS_CANCER_SCREENING_METRICS: DataTypeConfig[] = [
     dataTableTitle: 'Summary for prostate cancer screening',
     mapConfig: medicareAdherenceHigherIsBetterMapConfig,
     dataTypeShortLabel: 'Prostate cancer',
-    fullDisplayName: 'prostate cancer screening',
+    fullDisplayName: 'Prostate cancer screening',
     surveyCollectedData: true,
     definition: {
-      text: ``,
+      text: `The number of men ages 55-69 who received a PSA test within a specific time period.`,
       citations: [
         {
           shortLabel: '',
@@ -210,10 +210,10 @@ export const PHRMA_BRFSS_CANCER_SCREENING_METRICS: DataTypeConfig[] = [
     dataTableTitle: 'Summary for colorectal cancer screening',
     mapConfig: medicareAdherenceHigherIsBetterMapConfig,
     dataTypeShortLabel: 'Colorectal cancer',
-    fullDisplayName: 'colorectal cancer screening',
+    fullDisplayName: 'Colorectal cancer screening',
     surveyCollectedData: true,
     definition: {
-      text: ``,
+      text: `The number of people ages 45-74 who received a colonoscopy, sigmoidoscopy, stool-based test, or CT colonography within a specific time period.`,
       citations: [
         {
           shortLabel: '',
@@ -289,10 +289,10 @@ export const PHRMA_BRFSS_CANCER_SCREENING_METRICS: DataTypeConfig[] = [
     dataTableTitle: 'Summary for cervical cancer screening',
     mapConfig: medicareAdherenceHigherIsBetterMapConfig,
     dataTypeShortLabel: 'Cervical cancer',
-    fullDisplayName: 'cervical cancer screening',
+    fullDisplayName: 'Cervical cancer screening',
     surveyCollectedData: true,
     definition: {
-      text: ``,
+      text: `The number of women ages 20-64 who received a Pap test or HPV test within a specific time period.`,
       citations: [
         {
           shortLabel: '',
@@ -367,10 +367,10 @@ export const PHRMA_BRFSS_CANCER_SCREENING_METRICS: DataTypeConfig[] = [
     dataTableTitle: 'Summary for lung cancer screening',
     mapConfig: medicareAdherenceHigherIsBetterMapConfig,
     dataTypeShortLabel: 'Lung cancer',
-    fullDisplayName: 'lung cancer screening',
+    fullDisplayName: 'Lung cancer screening',
     surveyCollectedData: true,
     definition: {
-      text: ``,
+      text: `The number of people ages 50-79 who received a low-dose CT scan within a specific time period.`,
       citations: [
         {
           shortLabel: '',
