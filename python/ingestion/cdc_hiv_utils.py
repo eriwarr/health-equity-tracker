@@ -131,9 +131,9 @@ GENDER_COLS = [
 ]
 TOTAL_DEATHS = f"{std_col.HIV_DEATHS_PREFIX}_{std_col.RAW_SUFFIX}"
 BW_FLOAT_COLS_RENAME_MAP = {
-    f"hiv_{m}{s}": f"hiv_{m}_black_women{s}"
-    for m in ["deaths", "diagnoses", "prevalence"]
-    for s in ["", "_pct_relative_inequity", "_pct_share", "_per_100k"]
+    f"hiv_{metric}{suffix}": f"hiv_{metric}_black_women{suffix}"
+    for metric in ["deaths", "diagnoses", "prevalence"]
+    for suffix in ["", "_pct_relative_inequity", "_pct_share", "_per_100k"]
 }
 BW_FLOAT_COLS_RENAME_MAP.update(
     {"population": "black_women_population_count", "hiv_population_pct": "black_women_population_pct"}
@@ -162,15 +162,22 @@ def get_bq_col_types(demo, geo, time_view):
                 std_col.RACE_CATEGORY_ID_COL: BQ_STRING,
             }
         )
-        types.update({f"hiv_{m}_black_women_per_100k": BQ_FLOAT for m in ["deaths", "diagnoses", "prevalence"]})
+        types.update(
+            {f"hiv_{metric}_black_women_per_100k": BQ_FLOAT for metric in ["deaths", "diagnoses", "prevalence"]}
+        )
         suffix = "_pct_relative_inequity" if time_view == HISTORICAL else ""
-        types.update({f"hiv_{m}_black_women{suffix}": BQ_FLOAT for m in ["deaths", "diagnoses", "prevalence"]})
+        types.update(
+            {f"hiv_{metric}_black_women{suffix}": BQ_FLOAT for metric in ["deaths", "diagnoses", "prevalence"]}
+        )
         if time_view == CURRENT:
             types.update(
                 {
                     "black_women_population_count": BQ_FLOAT,
                     "black_women_population_pct": BQ_FLOAT,
-                    **{f"hiv_{m}_black_women_pct_share": BQ_FLOAT for m in ["deaths", "diagnoses", "prevalence"]},
+                    **{
+                        f"hiv_{metric}_black_women_pct_share": BQ_FLOAT
+                        for metric in ["deaths", "diagnoses", "prevalence"]
+                    },
                 }
             )
         return types
