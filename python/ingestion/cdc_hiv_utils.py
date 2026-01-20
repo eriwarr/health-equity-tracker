@@ -40,14 +40,14 @@ BW_HIV_METRICS = {k: HIV_METRICS[k] for k in ["deaths", "diagnoses", "prevalence
 NON_PER_100K_LIST = [std_col.HIV_CARE_PREFIX, std_col.HIV_PREP_PREFIX, std_col.HIV_STIGMA_INDEX]
 
 PER_100K_MAP = {
-    p: std_col.generate_column_name(p, std_col.PER_100K_SUFFIX)
-    for p in HIV_METRICS.values()
-    if p not in NON_PER_100K_LIST
+    prefix: std_col.generate_column_name(prefix, std_col.PER_100K_SUFFIX)
+    for prefix in HIV_METRICS.values()
+    if prefix not in NON_PER_100K_LIST
 }
 PCT_SHARE_MAP = {
-    p: std_col.generate_column_name(p, std_col.PCT_SHARE_SUFFIX)
-    for p in HIV_METRICS.values()
-    if p != std_col.HIV_STIGMA_INDEX
+    prefix: std_col.generate_column_name(prefix, std_col.PCT_SHARE_SUFFIX)
+    for prefix in HIV_METRICS.values()
+    if prefix != std_col.HIV_STIGMA_INDEX
 }
 PCT_SHARE_MAP.update(
     {
@@ -64,9 +64,9 @@ BW_PCT_SHARE_MAP = {
     std_col.POPULATION_COL: std_col.HIV_POPULATION_PCT,
 }
 PCT_RELATIVE_INEQUITY_MAP = {
-    p: std_col.generate_column_name(p, std_col.PCT_REL_INEQUITY_SUFFIX)
-    for p in HIV_METRICS.values()
-    if p != std_col.HIV_STIGMA_INDEX
+    prefix: std_col.generate_column_name(prefix, std_col.PCT_REL_INEQUITY_SUFFIX)
+    for prefix in HIV_METRICS.values()
+    if prefix != std_col.HIV_STIGMA_INDEX
 }
 
 BREAKDOWN_TO_STANDARD_BY_COL = {
@@ -87,14 +87,14 @@ BREAKDOWN_TO_STANDARD_BY_COL = {
 
 CARE_PREP_MAP = {std_col.HIV_CARE_PREFIX: std_col.HIV_CARE_LINKAGE, std_col.HIV_PREP_PREFIX: std_col.HIV_PREP_COVERAGE}
 POP_MAP = {
-    p: (
+    prefix: (
         std_col.HIV_CARE_POPULATION
-        if p == std_col.HIV_CARE_PREFIX
+        if prefix == std_col.HIV_CARE_PREFIX
         else std_col.HIV_PREP_POPULATION
-        if p == std_col.HIV_PREP_PREFIX
+        if prefix == std_col.HIV_PREP_PREFIX
         else std_col.POPULATION_COL
     )
-    for p in HIV_METRICS.values()
+    for prefix in HIV_METRICS.values()
 }
 DICTS = [HIV_METRICS, CARE_PREP_MAP, PER_100K_MAP, PCT_SHARE_MAP, PCT_RELATIVE_INEQUITY_MAP]
 
@@ -105,15 +105,15 @@ BASE_COLS = [
     std_col.HIV_PREP_PREFIX,
     std_col.HIV_PREVALENCE_PREFIX,
 ]
-BASE_COLS_NO_PREP, BASE_COLS_PER_100K = [c for c in BASE_COLS if c != std_col.HIV_PREP_PREFIX], [
-    c for c in BASE_COLS if c not in NON_PER_100K_LIST
+BASE_COLS_NO_PREP, BASE_COLS_PER_100K = [col for col in BASE_COLS if col != std_col.HIV_PREP_PREFIX], [
+    col for col in BASE_COLS if col not in NON_PER_100K_LIST
 ]
-PER_100K_COLS = [f"{c}_{std_col.PER_100K_SUFFIX}" for c in BASE_COLS_PER_100K]
-PCT_SHARE_COLS, BW_PCT_SHARE_COLS = [f"{c}_{std_col.PCT_SHARE_SUFFIX}" for c in BASE_COLS], [
-    f"{c}_{std_col.PCT_SHARE_SUFFIX}" for c in BASE_COLS_PER_100K
+PER_100K_COLS = [f"{col}_{std_col.PER_100K_SUFFIX}" for col in BASE_COLS_PER_100K]
+PCT_SHARE_COLS, BW_PCT_SHARE_COLS = [f"{col}_{std_col.PCT_SHARE_SUFFIX}" for col in BASE_COLS], [
+    f"{col}_{std_col.PCT_SHARE_SUFFIX}" for col in BASE_COLS_PER_100K
 ]
-PCT_REL_INEQUITY_COLS, BW_PCT_REL_INEQUITY_COLS = [f"{c}_{std_col.PCT_REL_INEQUITY_SUFFIX}" for c in BASE_COLS], [
-    f"{c}_{std_col.PCT_REL_INEQUITY_SUFFIX}" for c in BASE_COLS_PER_100K
+PCT_REL_INEQUITY_COLS, BW_PCT_REL_INEQUITY_COLS = [f"{col}_{std_col.PCT_REL_INEQUITY_SUFFIX}" for col in BASE_COLS], [
+    f"{col}_{std_col.PCT_REL_INEQUITY_SUFFIX}" for col in BASE_COLS_PER_100K
 ]
 
 COMMON_COLS = [
@@ -125,9 +125,9 @@ COMMON_COLS = [
     std_col.HIV_CARE_POPULATION_PCT,
 ]
 GENDER_COLS = [
-    f"{c}_{g}"
-    for c in BASE_COLS_NO_PREP
-    for g in [std_col.TOTAL_ADDITIONAL_GENDER, std_col.TOTAL_TRANS_MEN, std_col.TOTAL_TRANS_WOMEN]
+    f"{col}_{gender}"
+    for col in BASE_COLS_NO_PREP
+    for gender in [std_col.TOTAL_ADDITIONAL_GENDER, std_col.TOTAL_TRANS_MEN, std_col.TOTAL_TRANS_WOMEN]
 ]
 TOTAL_DEATHS = f"{std_col.HIV_DEATHS_PREFIX}_{std_col.RAW_SUFFIX}"
 BW_FLOAT_COLS_RENAME_MAP = {
@@ -203,8 +203,8 @@ def get_bq_col_types(demo, geo, time_view):
     if time_view == CURRENT:
         types.update(
             {
-                **{f"{c}_pct_share": BQ_FLOAT for c in BASE_COLS},
-                **{f"{c}": BQ_FLOAT for c in BASE_COLS},
+                **{f"{col}_pct_share": BQ_FLOAT for col in BASE_COLS},
+                **{f"{col}": BQ_FLOAT for col in BASE_COLS},
                 std_col.HIV_POPULATION: BQ_FLOAT,
                 std_col.HIV_CARE_POPULATION: BQ_FLOAT,
                 std_col.HIV_PREP_POPULATION: BQ_FLOAT,
@@ -214,13 +214,13 @@ def get_bq_col_types(demo, geo, time_view):
             }
         )
     else:
-        types.update({f"{c}_pct_relative_inequity": BQ_FLOAT for c in BASE_COLS})
+        types.update({f"{col}_pct_relative_inequity": BQ_FLOAT for col in BASE_COLS})
     if geo == NATIONAL_LEVEL and demo == std_col.SEX_COL:
         types.update(
             {
-                f"{c}_{g}": BQ_FLOAT
-                for c in BASE_COLS_NO_PREP
-                for g in ["total_additional_gender", "total_trans_men", "total_trans_women"]
+                f"{col}_{gender}": BQ_FLOAT
+                for col in BASE_COLS_NO_PREP
+                for gender in ["total_additional_gender", "total_trans_men", "total_trans_women"]
             }
         )
     return types
