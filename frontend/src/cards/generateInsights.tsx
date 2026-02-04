@@ -49,10 +49,19 @@ async function fetchAIInsight(prompt: string): Promise<string> {
     })
 
     if (!dataResponse.ok) {
+      if (dataResponse.status === 429) {
+        return 'AI insights temporarily unavailable due to rate limits. Please try again later.'
+      }
       throw new Error(`Failed to fetch AI insight: ${dataResponse.statusText}`)
     }
 
     const insight = await dataResponse.json()
+
+    // Backend now returns Claude's response in the 'content' field
+    if (!insight.content) {
+      throw new Error('No content returned from AI service')
+    }
+
     const content = insight.content.trim()
 
     return content
@@ -66,26 +75,27 @@ function generateInsightPrompt(disparities: Disparity): string {
   const { subgroup, location, measure, populationShare, outcomeShare, ratio } =
     disparities
 
-  return `
-    Given the following disparity data:
-    Subgroup: ${subgroup}
-    Location: ${location}
-    Measure: ${measure}
-    Population share: ${populationShare}%
-    Health outcome share: ${outcomeShare}%
-    Ratio: ${ratio}
+  return `You are a public health data analyst. Analyze this health disparity data and provide a clear, accessible insight.
 
-    Example:
-    "In the US, [Subgroup] individuals make up [Population Share]% of the population but account for [Outcome Share]% of [Measure], making them [Ratio] times more likely to [Impact]."
+Data:
+- Subgroup: ${subgroup}
+- Location: ${location}
+- Health Measure: ${measure}
+- Population Share: ${populationShare}%
+- Health Outcome Share: ${outcomeShare}%
+- Disparity Ratio: ${ratio}:1
 
-    Guidelines:
-    - Uses contrasting words like "but" or "while" to emphasize differences.
-    - Avoids assumptions and reflects the data as presented.
-    - Uses clear and simple language to make the disparity easily understood.
-    - Adapt the measure to fit grammatically (e.g., "uninsured cases", "HIV deaths, Black women").
-    - Is suitable for use in reports or presentations.
-    - If measure PrEP, population share is the PrEP eligible population and the measure if PrEP prescriptions.
-  `
+Please write a single, clear paragraph (2-3 sentences) that:
+1. States the disparity using contrasting language (e.g., "but", "while", "however")
+2. Makes the real-world impact clear
+3. Uses plain language accessible to both practitioners and community members
+4. Adapts the measure name to fit grammatically (e.g., "uninsured cases", "HIV deaths", "PrEP prescriptions")
+
+Note: If the measure is PrEP, the population share represents PrEP-eligible population and the outcome is PrEP prescriptions.
+
+Example format: "In ${location}, ${subgroup} individuals make up ${populationShare}% of the population but account for ${outcomeShare}% of ${measure}, making them ${ratio} times more likely to experience this health outcome."
+
+Provide only the insight paragraph, no preamble or additional formatting.`
 }
 
 function mapRelevantData(
