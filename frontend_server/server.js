@@ -129,21 +129,27 @@ app.post('/fetch-ai-insight', async (req, res) => {
     return res.json({ content: cachedItem.content })
   }
 
-  const apiKey = assertEnvVar('OPENAI_API_KEY')
+  const apiKey = assertEnvVar('ANTHROPIC_API_KEY')
 
   try {
     const aiResponse = await fetch(
-      'https://api.openai.com/v1/chat/completions',
+      'https://api.anthropic.com/v1/messages',
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 500,
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 1024,
+          messages: [
+            { 
+              role: 'user', 
+              content: prompt 
+            }
+          ],
         }),
       },
     )
@@ -160,7 +166,7 @@ app.post('/fetch-ai-insight', async (req, res) => {
     }
 
     const json = await aiResponse.json()
-    const content = json.choices?.[0]?.message?.content || 'No content returned'
+    const content = json.content?.[0]?.text || 'No content returned'
     const trimmedContent = content.trim()
 
     // Store in cache with timestamp
