@@ -24,7 +24,11 @@ inputs:
   ahr-api-key:
     description: "AHR API key"
     required: true
-
+  anthropic-api-key:
+    description: "Anthropic API key"
+    required: false
+    default: ""
+    
 outputs:
   data-server-url:
     description: "URL of the deployed data server"
@@ -99,11 +103,13 @@ runs:
       uses: SatcherInstitute/health-equity-tracker/.github/actions/buildAndPush@main
       env:
         VITE_OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+        VITE_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
       with:
         dockerfile: "frontend_server/Dockerfile"
         image-path: "gcr.io/${{ inputs.project-id }}/frontend"
         deploy-context: ${{ inputs.environment }}
         openai-api-key: ${{ inputs.openai-api-key }}
+        anthropic-api-key: ${{ inputs.anthropic-api-key }}
 
     # Terraform and deployment
     - name: Setup Terraform

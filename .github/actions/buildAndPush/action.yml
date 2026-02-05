@@ -20,6 +20,10 @@ inputs:
   openai-api-key:
     description: "OpenAI API key for generating insights"
     required: false
+  anthropic-api-key: 
+    description: "Claude API key for generating insights"
+    required: false
+
 outputs:
   image-digest:
     description: "Digest of image pushed to GCR"
@@ -37,6 +41,7 @@ runs:
         --build-arg="DEPLOY_CONTEXT=${{ inputs.deploy-context }}" \
         --build-arg="AHR_API_KEY=${{ inputs.ahr-api-key }}" \
         --build-arg="OPENAI_API_KEY=${{ inputs.openai-api-key }}"
+        --build-arg="ANTHROPIC_API_KEY=${{ inputs.anthropic-api-key }}"
       shell: bash
     - run: docker push ${{ inputs.image-path }}
       shell: bash
