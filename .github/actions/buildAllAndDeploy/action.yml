@@ -108,8 +108,8 @@ runs:
         dockerfile: "frontend_server/Dockerfile"
         image-path: "gcr.io/${{ inputs.project-id }}/frontend"
         deploy-context: ${{ inputs.environment }}
-        openai-api-key: ${{ inputs.openai-api-key }}
         anthropic-api-key: ${{ inputs.anthropic-api-key }}
+        openai-api-key: ${{ inputs.openai-api-key }}
 
     # Terraform and deployment
     - name: Setup Terraform

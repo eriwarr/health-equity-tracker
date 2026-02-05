@@ -4,6 +4,9 @@ inputs:
   ahr-api-key:
     description: "AHR API key used to fetch AHR data from the GraphQL endpoint"
     required: false
+  anthropic-api-key:
+    description: 'Anthropic API key'
+    required: false
   dockerfile:
     description: "Relative path to dockerfile"
     required: true
@@ -19,9 +22,6 @@ inputs:
     required: false
   openai-api-key:
     description: "OpenAI API key for generating insights"
-    required: false
-  anthropic-api-key: 
-    description: "Claude API key for generating insights"
     required: false
 
 outputs:
@@ -40,7 +40,7 @@ runs:
         docker build -t ${{ inputs.image-path }} -f ${{ inputs.dockerfile }} ${{ inputs.build-directory }} \
         --build-arg="DEPLOY_CONTEXT=${{ inputs.deploy-context }}" \
         --build-arg="AHR_API_KEY=${{ inputs.ahr-api-key }}" \
-        --build-arg="OPENAI_API_KEY=${{ inputs.openai-api-key }}"
+        --build-arg="OPENAI_API_KEY=${{ inputs.openai-api-key }}" \
         --build-arg="ANTHROPIC_API_KEY=${{ inputs.anthropic-api-key }}"
       shell: bash
     - run: docker push ${{ inputs.image-path }}
