@@ -17,17 +17,12 @@ inputs:
   tf-state-bucket:
     description: "Terraform state bucket"
     required: true
-  openai-api-key:
-    description: "OpenAI API key"
-    required: false
-    default: ""
   ahr-api-key:
     description: "AHR API key"
     required: true
   anthropic-api-key:
-    description: "Anthropic API key"
-    required: false
-    default: ""
+    description: "Claude API key"
+    required: true
     
 outputs:
   data-server-url:
@@ -101,15 +96,11 @@ runs:
     - name: Build and Push Frontend Image
       id: frontend
       uses: SatcherInstitute/health-equity-tracker/.github/actions/buildAndPush@main
-      env:
-        VITE_OPENAI_API_KEY: ${{ inputs.openai-api-key }}
-        VITE_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
       with:
         dockerfile: "frontend_server/Dockerfile"
         image-path: "gcr.io/${{ inputs.project-id }}/frontend"
         deploy-context: ${{ inputs.environment }}
         anthropic-api-key: ${{ inputs.anthropic-api-key }}
-        openai-api-key: ${{ inputs.openai-api-key }}
 
     # Terraform and deployment
     - name: Setup Terraform
@@ -174,3 +165,4 @@ runs:
         FRONTEND_URL: ${{ steps.terraform.outputs.frontend_url }}
         PATH_TO_SA_CREDS: config/creds.json
         AHR_API_KEY: ${{ inputs.ahr-api-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}

@@ -182,6 +182,7 @@ app.post('/fetch-ai-insight', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch AI insight' })
   }
 })
+
 // Serve static files from the build directory.
 const __dirname = dirname(fileURLToPath(import.meta.url))
 app.use(express.static(path.join(__dirname, buildDir)))
