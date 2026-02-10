@@ -128,7 +128,7 @@ function mapRelevantData(
 export async function generateInsight(
   chartMetrics: ChartData,
   hashId: ScrollableHashId,
-  fips: Fips,
+  fips?: Fips,
 ): Promise<string> {
   if (!SHOW_INSIGHT_GENERATION) {
     return ''
@@ -143,7 +143,7 @@ export async function generateInsight(
 
     const processedData = mapRelevantData(knownData, metricIds)
     const { topic, demographic } = extractMetadata(processedData)
-    const location = fips.getDisplayName()
+    const location = fips?.getDisplayName() || ''
     const formattedData = JSON.stringify(processedData, null, 2)
     const prompt = generateInsightPrompt(
       topic,

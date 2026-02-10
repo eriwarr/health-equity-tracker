@@ -37,7 +37,7 @@ function CardWrapper(props: {
   shareConfig?: any
   demographicType?: any
   metricIds?: any
-  fips: Fips
+  fips?: Fips
 }) {
   const loadingComponent = (
     <div

@@ -24,7 +24,7 @@ type InsightDisplayProps = {
   queryResponses: MetricQueryResponse[]
   shareConfig: MetricConfig
   hashId: ScrollableHashId
-  fips: Fips
+  fips?: Fips
 }
 
 const InsightDisplay: React.FC<InsightDisplayProps> = ({
