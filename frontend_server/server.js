@@ -106,14 +106,31 @@ app.use('/api', apiProxy)
 
 app.use(compression())
 
-app.get('/rate-limit-status', (req, res) => {
-  res.json({
-    rateLimitReached: RATE_LIMIT_REACHED,
-  })
-})
-
 const aiInsightCache = new Map()
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+// Track rate limit with timestamp
+let rateLimitInfo = {
+  isLimited: false,
+  lastLimitTime: null
+}
+
+const RATE_LIMIT_RESET_TIME = 60 * 60 * 1000 // 1 hour in milliseconds
+
+app.get('/rate-limit-status', (req, res) => {
+  // Auto-reset rate limit after RATE_LIMIT_RESET_TIME
+  if (rateLimitInfo.isLimited && rateLimitInfo.lastLimitTime) {
+    const timeSinceLimit = Date.now() - rateLimitInfo.lastLimitTime
+    if (timeSinceLimit > RATE_LIMIT_RESET_TIME) {
+      rateLimitInfo.isLimited = false
+      rateLimitInfo.lastLimitTime = null
+    }
+  }
+
+  res.json({
+    rateLimitReached: rateLimitInfo.isLimited,
+  })
+})
 
 app.post('/fetch-ai-insight', async (req, res) => {
   const prompt = req.body.prompt
@@ -155,11 +172,14 @@ app.post('/fetch-ai-insight', async (req, res) => {
     )
 
     if (aiResponse.status === 429) {
-      RATE_LIMIT_REACHED = true
+      rateLimitInfo.isLimited = true
+      rateLimitInfo.lastLimitTime = now
       return res.status(429).json({ error: 'Rate limit reached' })
     }
 
-    RATE_LIMIT_REACHED = false
+    // Successfully got a response - reset rate limit flag
+    rateLimitInfo.isLimited = false
+    rateLimitInfo.lastLimitTime = null
 
     if (!aiResponse.ok) {
       throw new Error(`AI API Error: ${aiResponse.statusText}`)

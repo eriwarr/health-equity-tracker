@@ -1,33 +1,15 @@
+// generateInsights.ts
+
 import type { MetricId } from '../data/config/MetricConfigTypes'
+import type { Fips } from '../data/utils/Fips'
 import { SHOW_INSIGHT_GENERATION } from '../featureFlags'
 import type { ChartData } from '../reports/Report'
-import {
-  extractRelevantData,
-  getHighestDisparity,
-} from './generateInsightsUtils'
+import type { ScrollableHashId } from '../utils/hooks/useStepObserver'
 
 const API_ENDPOINT = '/fetch-ai-insight'
 const ERROR_GENERATING_INSIGHT = 'Error generating insight'
 
 export type Dataset = Record<string, any>
-
-export interface Disparity {
-  disparity: number
-  location: string
-  measure: string
-  outcomeShare: number
-  populationShare: number
-  ratio: number
-  subgroup: string
-}
-
-export interface ResultData {
-  fips_name: string
-  race_and_ethnicity?: string
-  age?: string | number
-  sex?: string
-  [key: string]: any
-}
 
 async function fetchAIInsight(prompt: string): Promise<string> {
   const baseApiUrl = import.meta.env.VITE_BASE_API_URL
@@ -57,56 +39,96 @@ async function fetchAIInsight(prompt: string): Promise<string> {
 
     const insight = await dataResponse.json()
 
-    // Backend now returns Claude's response in the 'content' field
     if (!insight.content) {
       throw new Error('No content returned from AI service')
     }
 
-    const content = insight.content.trim()
-
-    return content
+    return insight.content.trim()
   } catch (error) {
     console.error('Error generating insight:', error)
     return ERROR_GENERATING_INSIGHT
   }
 }
 
-function generateInsightPrompt(disparities: Disparity): string {
-  const { subgroup, location, measure, populationShare, outcomeShare, ratio } =
-    disparities
+function extractMetadata(data: Dataset[]): {
+  topic: string
+  demographic: string
+} {
+  const firstDataPoint = data[0] || {}
 
-  return `You are a public health data analyst. Analyze this health disparity data and provide a clear, accessible insight.
+  let demographic = 'overall population'
+  if (firstDataPoint.subgroup) {
+    const subgroup = firstDataPoint.subgroup
+    if (subgroup.includes('(NH)') || subgroup.includes('Latino')) {
+      demographic = 'race and ethnicity'
+    } else if (!isNaN(Number(subgroup)) || subgroup.includes('-')) {
+      demographic = 'age group'
+    } else if (subgroup === 'Male' || subgroup === 'Female') {
+      demographic = 'sex'
+    }
+  }
 
-Data:
-- Subgroup: ${subgroup}
-- Location: ${location}
-- Health Measure: ${measure}
-- Population Share: ${populationShare}%
-- Health Outcome Share: ${outcomeShare}%
-- Disparity Ratio: ${ratio}:1
+  // Extract topic from the data keys
+  const dataKeys = Object.keys(firstDataPoint).filter(
+    (k) => k !== 'fips_name' && k !== 'subgroup' && k !== 'time_period',
+  )
+  const firstMetricKey = dataKeys[0] || ''
+  const topic = firstMetricKey
+    .replace(
+      /_pct_share|_population_pct|_per_100k|_rate|_estimated_total|_population/gi,
+      '',
+    )
+    .replace(/_/g, ' ')
+    .trim()
 
-Please write a single, clear paragraph (2-3 sentences) that:
-1. States the disparity using contrasting language (e.g., "but", "while", "however")
-2. Makes the real-world impact clear
-3. Uses plain language accessible to both practitioners and community members
-4. Adapts the measure name to fit grammatically (e.g., "uninsured cases", "HIV deaths", "PrEP prescriptions")
+  return { topic, demographic }
+}
 
-Note: If the measure is PrEP, the population share represents PrEP-eligible population and the outcome is PrEP prescriptions.
+function generateInsightPrompt(
+  topic: string,
+  location: string,
+  demographic: string,
+  formattedData: string,
+  hashId: ScrollableHashId,
+): string {
+  return `Analyze health data about ${topic} in ${location} for ${demographic} with this data: ${formattedData}.
 
-Example format: "In ${location}, ${subgroup} individuals make up ${populationShare}% of the population but account for ${outcomeShare}% of ${measure}, making them ${ratio} times more likely to experience this health outcome."
-
-Provide only the insight paragraph, no preamble or additional formatting.`
+Write a single, clear paragraph (2-3 sentences) that identifies the most significant disparity or pattern and makes the real-world impact clear using plain language for our ${hashId} chart.`
 }
 
 function mapRelevantData(
   dataArray: Dataset[],
   metricIds: MetricId[],
-): ResultData[] {
-  return dataArray.map((dataset) => extractRelevantData(dataset, metricIds))
+): Dataset[] {
+  return dataArray.map((dataset) => {
+    const { fips_name, race_and_ethnicity, age, sex, time_period, ...rest } =
+      dataset
+    const result: Dataset = { fips_name }
+
+    // Add demographic field
+    const subgroup = race_and_ethnicity || age || sex
+    if (subgroup) {
+      result.subgroup = subgroup
+    }
+
+    // Preserve time_period if it exists
+    if (time_period !== undefined) {
+      result.time_period = time_period
+    }
+
+    // Add metric values
+    metricIds.forEach((metricId) => {
+      result[metricId] = rest[metricId]
+    })
+
+    return result
+  })
 }
 
 export async function generateInsight(
   chartMetrics: ChartData,
+  hashId: ScrollableHashId,
+  fips: Fips,
 ): Promise<string> {
   if (!SHOW_INSIGHT_GENERATION) {
     return ''
@@ -114,10 +136,24 @@ export async function generateInsight(
 
   try {
     const { knownData, metricIds } = chartMetrics
+
+    if (!knownData || knownData.length === 0) {
+      return 'No data available to generate insights.'
+    }
+
     const processedData = mapRelevantData(knownData, metricIds)
-    const highestDisparity = getHighestDisparity(processedData)
-    const insightPrompt = generateInsightPrompt(highestDisparity)
-    return await fetchAIInsight(insightPrompt)
+    const { topic, demographic } = extractMetadata(processedData)
+    const location = fips.getDisplayName()
+    const formattedData = JSON.stringify(processedData, null, 2)
+    const prompt = generateInsightPrompt(
+      topic,
+      location,
+      demographic,
+      formattedData,
+      hashId,
+    )
+
+    return await fetchAIInsight(prompt)
   } catch (error) {
     console.error(ERROR_GENERATING_INSIGHT, error)
     return ERROR_GENERATING_INSIGHT

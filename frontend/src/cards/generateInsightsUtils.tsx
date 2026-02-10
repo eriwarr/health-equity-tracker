@@ -1,62 +1,42 @@
-import type { MetricId } from '../data/config/MetricConfigTypes'
-import type { Dataset, Disparity, ResultData } from './generateInsights'
+import type { Dataset } from './generateInsights'
 
 const RATE_LIMIT_ENDPOINT = '/rate-limit-status'
 
-function getKeyBySubstring(obj: any, substring: string): [string, string] {
-  const key = Object.keys(obj).find((key) => key.includes(substring)) || ''
-  let measure = ''
-  if (key) {
-    measure = key.replace(/_pct_share$|_population_pct$/, '')
-  }
-  return [key, measure]
-}
+export function extractMetadata(data: Dataset[]): {
+  topic: string
+  location: string
+  demographic: string
+} {
+  const firstDataPoint = data[0] || {}
 
-export function getHighestDisparity(data: ResultData[]): Disparity {
-  // Filter out items with subgroup equal to "White (NH)"
-  const filteredData = data.filter((item) => item.subgroup !== 'White (NH)')
+  const location = firstDataPoint.fips_name || 'United States'
 
-  const disparities = filteredData.map((item) => {
-    const { fips_name, subgroup, ...rest } = item
-    const [pctShareKey, measure] = getKeyBySubstring(rest, 'pct_share')
-    const [populationPctKey] = getKeyBySubstring(rest, 'population_pct')
-    const outcomeShare = Math.round(rest[pctShareKey])
-    const populationShare = Math.round(rest[populationPctKey])
-    const ratio = Math.round(outcomeShare / populationShare)
-
-    const disparity: Disparity = {
-      location: fips_name,
-      subgroup,
-      disparity: ratio - 1,
-      measure,
-      outcomeShare,
-      populationShare,
-      ratio,
+  let demographic = 'overall population'
+  if (firstDataPoint.subgroup) {
+    const subgroup = firstDataPoint.subgroup
+    if (subgroup.includes('(NH)') || subgroup.includes('Latino')) {
+      demographic = 'race and ethnicity'
+    } else if (!isNaN(Number(subgroup)) || subgroup.includes('-')) {
+      demographic = 'age group'
+    } else if (subgroup === 'Male' || subgroup === 'Female') {
+      demographic = 'sex'
     }
+  }
 
-    return disparity
-  })
-
-  // Return the object with the highest disparity among the valid disparities
-  return disparities.reduce((max, curr) =>
-    curr.disparity > max.disparity ? curr : max,
+  // Extract topic from the data keys
+  const dataKeys = Object.keys(firstDataPoint).filter(
+    (k) => k !== 'fips_name' && k !== 'subgroup',
   )
-}
+  const firstMetricKey = dataKeys[0] || ''
+  const topic = firstMetricKey
+    .replace(
+      /_pct_share|_population_pct|_per_100k|_rate|_estimated_total|_population/gi,
+      '',
+    )
+    .replace(/_/g, ' ')
+    .trim()
 
-export function extractRelevantData(
-  dataset: Dataset,
-  metricIds: MetricId[],
-): ResultData {
-  const { fips_name, race_and_ethnicity, age, sex, ...rest } = dataset
-  const result: ResultData = { fips_name }
-
-  result.subgroup = race_and_ethnicity || age || sex
-
-  metricIds.forEach((metricId) => {
-    result[metricId] = rest[metricId]
-  })
-
-  return result
+  return { topic, location, demographic }
 }
 
 export async function checkRateLimitStatus(): Promise<boolean> {
