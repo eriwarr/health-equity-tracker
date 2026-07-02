@@ -186,24 +186,6 @@ variable "flagged_insights_writer_role_id" {
   type        = string
 }
 
-variable "ahr_api_key" {
-  description = "AHR GraphQL API key for ingestion"
-  type        = string
-  sensitive   = true
-}
-
-variable "anthropic_api_key" {
-  description = "Anthropic API key for AI insights"
-  type        = string
-  sensitive   = true
-}
-
-variable "webflow_api_token" {
-  description = "Webflow API token for CMS blog read access"
-  type        = string
-  sensitive   = true
-}
-
 variable "insights_cache_bucket" {
   description = "Name of the GCS bucket for caching AI-generated insights"
   type        = string
