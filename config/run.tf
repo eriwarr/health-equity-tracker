@@ -93,9 +93,9 @@ resource "google_cloud_run_service" "gcs_to_bq_service" {
   autogenerate_revision_name = true
 }
 
-# Cloud Run service that serves data to client frontends.
-resource "google_cloud_run_service" "data_server_service" {
-  name     = var.data_server_service_name
+# Combined Go server: serves the React frontend and all data/AI/news APIs.
+resource "google_cloud_run_service" "server_service" {
+  name     = var.server_service_name
   location = var.compute_region
   project  = var.project_id
 
@@ -107,27 +107,52 @@ resource "google_cloud_run_service" "data_server_service" {
     }
     spec {
       containers {
-        image = format("gcr.io/%s/%s@%s", var.project_id, var.data_server_image_name, var.data_server_image_digest)
+        image = format("gcr.io/%s/%s@%s", var.project_id, var.server_image_name, var.server_image_digest)
         env {
-          # GCS bucket from where the data tables are read.
           name  = "GCS_BUCKET"
           value = var.export_bucket
         }
         env {
-          # GCS bucket for the AI insights cache (read/write).
+          name  = "METADATA_FILENAME"
+          value = var.metadata_filename
+        }
+        env {
           name  = "INSIGHTS_CACHE_BUCKET"
           value = var.insights_cache_bucket
         }
         env {
-          # GCS bucket for user-flagged insights (read/write/list).
           name  = "FLAGGED_INSIGHTS_BUCKET"
           value = var.flagged_insights_bucket
+        }
+        env {
+          name = "ANTHROPIC_API_KEY"
+          value_from {
+            secret_key_ref {
+              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
+              name = "anthropic-api-key"
+              key  = "latest"
+            }
+          }
+        }
+        env {
+          name = "WEBFLOW_API_TOKEN"
+          value_from {
+            secret_key_ref {
+              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
+              name = "webflow-api-token"
+              key  = "latest"
+            }
+          }
+        }
+        env {
+          name  = "INSIGHT_NEGATIVE_EXAMPLES_ENABLED"
+          value = "true"
         }
 
         resources {
           limits = {
-            memory = "8Gi"
-            cpu    = 4
+            memory = "512Mi"
+            cpu    = 1
           }
         }
       }
@@ -188,80 +213,18 @@ resource "google_cloud_run_service" "exporter_service" {
 }
 
 
-# Cloud Run service that serves the frontend
-resource "google_cloud_run_service" "frontend_service" {
-  name     = var.frontend_service_name
-  location = var.compute_region
-  project  = var.project_id
+# Domain mapping for the custom domain is managed manually, not via Terraform.
+# Cloud Run domain mappings require the caller to have verified domain ownership in Search Console.
+# The CI service account does not have that verification, so Terraform apply would fail with
+# "Caller is not authorized to administer the domain."
+# To create or update the mapping, run as an authorized user:
+#   gcloud beta run domain-mappings create --service=server-service \
+#     --domain=<domain> --project=<project> --region=us-central1
 
-  template {
-    metadata {
-      annotations = {
-        "autoscaling.knative.dev/maxScale" = "50" # User-facing can scale to handle many requests
-      }
-    }
-    spec {
-      containers {
-        image = format("gcr.io/%s/%s@%s", var.project_id, var.frontend_image_name, var.frontend_image_digest)
-        env {
-          # URL of the Data Server Cloud Run service.
-          name  = "DATA_SERVER_URL"
-          value = google_cloud_run_service.data_server_service.status.0.url
-        }
-
-        env {
-          name = "ANTHROPIC_API_KEY"
-          value_from {
-            secret_key_ref {
-              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
-              name = "anthropic-api-key"
-              key  = "latest"
-            }
-          }
-        }
-        env {
-          name = "WEBFLOW_API_TOKEN"
-          value_from {
-            secret_key_ref {
-              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
-              name = "webflow-api-token"
-              key  = "latest"
-            }
-          }
-        }
-        env {
-          # Feeds flagged insights back into the generation prompt as negative examples
-          # so regenerated insights steer away from previously flagged content.
-          name  = "INSIGHT_NEGATIVE_EXAMPLES_ENABLED"
-          value = "true"
-        }
-
-        resources {
-          limits = {
-            memory = "8Gi"
-            cpu    = 4
-          }
-        }
-
-      }
-      service_account_name = google_service_account.frontend_runner_identity.email
-    }
-  }
-
-  traffic {
-    percent         = 100
-    latest_revision = true
-  }
-  autogenerate_revision_name = true
-}
-
-# Output the URL of the data server and frontend for use in e2e tests.
-output "data_server_url" {
-  value = google_cloud_run_service.data_server_service.status.0.url
-}
-
+# Output the URL of the server for use in e2e tests and the buildAllAndDeploy action.
+# frontend_url kept for backward compatibility with callers that reference this output.
 output "frontend_url" {
-  value = google_cloud_run_service.frontend_service.status.0.url
+  value = google_cloud_run_service.server_service.status.0.url
 }
 
 # Output the URLs of the pipeline services (previously used for DAGs)
