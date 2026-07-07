@@ -65,8 +65,14 @@ resource "google_cloud_run_service" "gcs_to_bq_service" {
           value = var.manual_uploads_project_id
         }
         env {
-          name  = "AHR_API_KEY"
-          value = var.ahr_api_key
+          name = "AHR_API_KEY"
+          value_from {
+            secret_key_ref {
+              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
+              name = "ahr-api-key"
+              key  = "latest"
+            }
+          }
         }
 
         resources {
@@ -119,12 +125,24 @@ resource "google_cloud_run_service" "server_service" {
           value = var.flagged_insights_bucket
         }
         env {
-          name  = "ANTHROPIC_API_KEY"
-          value = var.anthropic_api_key
+          name = "ANTHROPIC_API_KEY"
+          value_from {
+            secret_key_ref {
+              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
+              name = "anthropic-api-key"
+              key  = "latest"
+            }
+          }
         }
         env {
-          name  = "WEBFLOW_API_TOKEN"
-          value = var.webflow_api_token
+          name = "WEBFLOW_API_TOKEN"
+          value_from {
+            secret_key_ref {
+              # Secret is created/rotated manually in Secret Manager (see secrets.tf).
+              name = "webflow-api-token"
+              key  = "latest"
+            }
+          }
         }
         env {
           name  = "INSIGHT_NEGATIVE_EXAMPLES_ENABLED"
