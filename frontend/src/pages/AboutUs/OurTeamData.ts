@@ -165,7 +165,7 @@ export const GOOGLE_FELLOWS = [
   {
     name: 'Ken Moore',
     role: 'UX Designer',
-    link: 'https://kenstatus.com',
+    link: 'http://web.archive.org/web/20220401002736/https://kenstatus.com/',
     text: 'In memoriam,',
   },
   {
