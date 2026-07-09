@@ -1,9 +1,14 @@
 import CloseIcon from '@mui/icons-material/Close'
 import { Autocomplete, TextField } from '@mui/material'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { USA_DISPLAY_NAME, USA_FIPS } from '../../data/utils/ConstantsGeography'
 import { Fips } from '../../data/utils/Fips'
+import { useIsBreakpointAndUp } from '../../utils/hooks/useIsBreakpointAndUp'
 import type { PopoverElements } from '../../utils/hooks/usePopover'
+import {
+  buildFipsSearchIndex,
+  filterAndRankFips,
+} from '../../utils/locationSearch'
 
 interface HetLocationSearchProps {
   clearRecentLocations: () => void
@@ -24,6 +29,12 @@ export default function HetLocationSearch(props: HetLocationSearchProps) {
     !isUsa && !props.recentLocations.some((code) => code === USA_FIPS)
 
   const [autoCompleteOpen, setAutoCompleteOpen] = useState(false)
+  const isSmAndUp = useIsBreakpointAndUp('sm')
+
+  const searchIndex = useMemo(
+    () => buildFipsSearchIndex(props.options),
+    [props.options],
+  )
 
   return (
     <div className='min-w-72 p-5'>
@@ -34,6 +45,9 @@ export default function HetLocationSearch(props: HetLocationSearchProps) {
         disableClearable={true}
         autoHighlight={true}
         options={props.options}
+        filterOptions={(options, { inputValue }) =>
+          filterAndRankFips(options, searchIndex, inputValue)
+        }
         groupBy={(option) => option.getFipsCategory()}
         clearOnEscape={true}
         getOptionLabel={(fips) => fips.getFullDisplayName()}
@@ -45,6 +59,13 @@ export default function HetLocationSearch(props: HetLocationSearchProps) {
         open={autoCompleteOpen}
         onOpen={() => setAutoCompleteOpen(true)}
         onClose={() => setAutoCompleteOpen(false)}
+        slotProps={{
+          // With the on-screen keyboard open, Popper's flip renders the list
+          // above the input and covers it. Always drop down, and on phones
+          // keep the list short enough to scroll in the remaining space.
+          popper: { modifiers: [{ name: 'flip', enabled: false }] },
+          listbox: isSmAndUp ? undefined : { style: { maxHeight: '30vh' } },
+        }}
         renderInput={(params) => (
           <TextField
             placeholder='County, state, or territory...'
