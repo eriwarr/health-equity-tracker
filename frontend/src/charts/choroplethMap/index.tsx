@@ -1,7 +1,8 @@
 import { select } from 'd3'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { CAWP_METRICS } from '../../data/providers/CawpProvider'
 import { PHRMA_METRICS } from '../../data/providers/PhrmaProvider'
+import { DEMOGRAPHIC_DISPLAY_TYPES_LOWER_CASE } from '../../data/query/Breakdowns'
 import { useIsBreakpointAndUp } from '../../utils/hooks/useIsBreakpointAndUp'
 import { useResponsiveWidth } from '../../utils/hooks/useResponsiveWidth'
 import { HetChartHoverTooltip } from '../HetChartHoverTooltip'
@@ -9,6 +10,7 @@ import { INVISIBLE_PRELOAD_WIDTH } from '../mapGlobals'
 import { embedHighestLowestGroups, getCountyAddOn } from '../mapHelperFunctions'
 import { useChartTooltip } from '../useChartTooltip'
 import { HEIGHT_WIDTH_RATIO } from '../utils'
+import { getMapA11ySummary } from './a11yUtils'
 import { MapTooltipContent } from './MapTooltipContent'
 import {
   createFeatures,
@@ -77,6 +79,19 @@ const ChoroplethMap = ({
         ? embedHighestLowestGroups(suppressedData, highestLowestGroupsByFips)
         : suppressedData,
     [suppressedData, highestLowestGroupsByFips, isUnknownsMap, isMulti],
+  )
+
+  const a11ySummaryId = useId()
+  const a11ySummary = useMemo(
+    () =>
+      getMapA11ySummary(
+        dataWithHighestLowest,
+        metricConfig,
+        fips,
+        isUnknownsMap,
+        DEMOGRAPHIC_DISPLAY_TYPES_LOWER_CASE[demographicType],
+      ),
+    [dataWithHighestLowest, metricConfig, fips, isUnknownsMap, demographicType],
   )
 
   const dimensions = useMemo(() => {
@@ -212,10 +227,14 @@ const ChoroplethMap = ({
       className={`mx-2 justify-center ${width === INVISIBLE_PRELOAD_WIDTH ? 'hidden' : 'block'}`}
       ref={ref}
     >
+      <p id={a11ySummaryId} className='sr-only'>
+        {a11ySummary}
+      </p>
       <svg
         ref={svgRef}
         style={{ width: '100%' }}
         aria-label={`Map showing ${filename}`}
+        aria-describedby={a11ySummaryId}
       />
 
       {renderResult && fips.isUsa() && (
