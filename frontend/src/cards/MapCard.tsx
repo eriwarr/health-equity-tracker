@@ -1,6 +1,6 @@
 import GridView from '@mui/icons-material/GridView'
-import { useSetAtom } from 'jotai'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { useMemo } from 'react'
 import { useLocation } from 'react-router'
 import { createColorScale } from '../charts/choroplethMap/colorSchemes'
 import ChoroplethMap from '../charts/choroplethMap/index'
@@ -61,14 +61,13 @@ import { useIsBreakpointAndUp } from '../utils/hooks/useIsBreakpointAndUp'
 import { useParamState } from '../utils/hooks/useParamState'
 import type { ScrollableHashId } from '../utils/hooks/useStepObserver'
 import type { MadLibId } from '../utils/MadLibs'
-import { locationAtom } from '../utils/sharedSettingsState'
+import { locationAtom, urlParamAtom } from '../utils/sharedSettingsState'
 import {
   ATLANTA_MODE_PARAM_KEY,
   EXTREMES_1_PARAM_KEY,
   EXTREMES_2_PARAM_KEY,
   getDemographicGroupFromGroupParam,
   getGroupParamFromDemographicGroup,
-  getParameter,
   MAP1_GROUP_PARAM,
   MAP2_GROUP_PARAM,
   MULTIPLE_MAPS_1_PARAM_KEY,
@@ -143,26 +142,11 @@ function MapCardWithKey(props: MapCardProps) {
     ? MAP2_GROUP_PARAM
     : MAP1_GROUP_PARAM
 
-  const initialGroupParam: string = getParameter(MAP_GROUP_PARAM, ALL)
-  const initialGroup = getDemographicGroupFromGroupParam(initialGroupParam)
-
-  const [activeDemographicGroup, setActiveDemographicGroup] =
-    useState<DemographicGroup>(initialGroup)
-
-  // Reset the selected group when the topic or demographic type changes.
-  // A group valid for one topic may not exist in another.
-  // Skip on initial mount — the group is already correctly set from the URL.
-  const isMountRef = useRef(true)
-  useEffect(() => {
-    if (isMountRef.current) {
-      isMountRef.current = false
-      return
-    }
-    setActiveDemographicGroup(ALL)
-    const params = new URLSearchParams(window.location.search)
-    params.set(MAP_GROUP_PARAM, ALL)
-    window.history.replaceState(null, '', '?' + params.toString())
-  }, [props.dataTypeConfig.dataTypeId, props.demographicType])
+  // Derived from the URL atom (not useState) so back/forward navigation and
+  // write-site group resets stay in sync without a remount.
+  const groupParam = useAtomValue(urlParamAtom(MAP_GROUP_PARAM))
+  const activeDemographicGroup: DemographicGroup =
+    getDemographicGroupFromGroupParam(groupParam || ALL)
 
   const [isAtlantaMode, setIsAtlantaMode] = useParamState<boolean>(
     ATLANTA_MODE_PARAM_KEY,
@@ -490,7 +474,6 @@ function MapCardWithKey(props: MapCardProps) {
         const hideGroupDropdown =
           Object.values(filterOptions).toString() === ALL
 
-        // derive current dropdown value; the useEffect above handles the reset
         const dropdownValue = filterOptions[
           DEMOGRAPHIC_DISPLAY_TYPES[demographicType]
         ].includes(activeDemographicGroup)
@@ -498,7 +481,6 @@ function MapCardWithKey(props: MapCardProps) {
           : ALL
 
         function handleMapGroupClick(_: any, newGroup: DemographicGroup) {
-          setActiveDemographicGroup(newGroup)
           const groupCode = getGroupParamFromDemographicGroup(newGroup)
           setLocationAtom((prev) => {
             const next = new URLSearchParams(prev.searchParams)
