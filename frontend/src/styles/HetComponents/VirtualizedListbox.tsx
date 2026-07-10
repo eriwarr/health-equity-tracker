@@ -10,15 +10,19 @@ import {
   useSyncExternalStore,
 } from 'react'
 import { List, type RowComponentProps, useListCallbackRef } from 'react-window'
-import type { Fips } from '../../data/utils/Fips'
 import { useIsBreakpointAndUp } from '../../utils/hooks/useIsBreakpointAndUp'
+import {
+  type LocationOption,
+  locationOptionKey,
+  locationOptionLabel,
+} from '../../utils/placeSearch'
 
-// renderOption returns [liProps, fips] and renderGroup returns its params
+// renderOption returns [liProps, option] and renderGroup returns its params
 // untouched; this component receives them via children and renders the rows
 // itself so only the visible slice of ~3,000 options is mounted.
 export type VirtualizedOptionTuple = [
   HTMLAttributes<HTMLLIElement> & { key: string },
-  Fips,
+  LocationOption,
 ]
 
 interface VirtualizedGroupParams {
@@ -81,7 +85,7 @@ type RowData =
   | {
       variant: 'option'
       optionProps: HTMLAttributes<HTMLLIElement> & { key: string }
-      fips: Fips
+      option: LocationOption
     }
 
 interface RowExtraProps {
@@ -107,14 +111,24 @@ function Row({
     top: offsets[index],
   }
   if (row.variant === 'header') {
+    // MUI's ListSubheader defaults to line-height 48px so a single line sits
+    // centered in the row; but the long "Cities" label wraps on narrow
+    // popovers, and at that line-height each wrapped line is 48px tall and
+    // overflows the fixed-height row. Center a tightly-leaded, clamped label
+    // within the row instead.
     return (
       <ListSubheader
         component='li'
         role='presentation'
         disableSticky
-        style={positioned}
+        style={{
+          ...positioned,
+          display: 'flex',
+          alignItems: 'center',
+          lineHeight: 1.2,
+        }}
       >
-        {row.label}
+        <span className='line-clamp-2'>{row.label}</span>
       </ListSubheader>
     )
   }
@@ -122,7 +136,7 @@ function Row({
   // MUI applies Mui-focused imperatively, but virtualized rows can remount
   // while highlighted (scroll away and back), losing the class. Deriving it
   // from state keeps the visual highlight consistent with aria-activedescendant.
-  const isHighlighted = row.fips.code === highlighted?.code
+  const isHighlighted = locationOptionKey(row.option) === highlighted?.code
   const rowClassName = [
     className,
     isHighlighted ? 'Mui-focused' : '',
@@ -133,7 +147,7 @@ function Row({
   return (
     <li key={key} {...optionProps} className={rowClassName} style={positioned}>
       <span className='min-w-0 overflow-hidden text-ellipsis whitespace-nowrap'>
-        {row.fips.getFullDisplayName()}
+        {locationOptionLabel(row.option)}
       </span>
     </li>
   )
@@ -163,9 +177,9 @@ const VirtualizedListbox = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(
           : []
       for (const group of childrenArray as VirtualizedGroupParams[]) {
         flattened.push({ variant: 'header', label: group.group })
-        for (const [optionProps, fips] of (group.children ??
+        for (const [optionProps, option] of (group.children ??
           []) as VirtualizedOptionTuple[]) {
-          flattened.push({ variant: 'option', optionProps, fips })
+          flattened.push({ variant: 'option', optionProps, option })
         }
       }
       const rowOffsets: number[] = []
@@ -201,7 +215,9 @@ const VirtualizedListbox = forwardRef<HTMLElement, HTMLAttributes<HTMLElement>>(
     useEffect(() => {
       if (!highlighted?.keyboard) return
       const index = rows.findIndex(
-        (row) => row.variant === 'option' && row.fips.code === highlighted.code,
+        (row) =>
+          row.variant === 'option' &&
+          locationOptionKey(row.option) === highlighted.code,
       )
       if (index >= 0) {
         listApi?.scrollToRow({
