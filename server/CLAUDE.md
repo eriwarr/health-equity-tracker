@@ -4,7 +4,7 @@ Combined Go HTTP server. A single binary and a single Docker image (~15 MB) serv
 
 - React static files with correct Cache-Control headers and SPA fallback
 - GCS dataset and metadata endpoints
-- AI insight generation (direct Anthropic API call — no proxy hop)
+- AI insight generation (direct Gemini API call — no proxy hop)
 - Insight cache and flagging (direct GCS reads/writes — no inter-service HTTP)
 - Webflow news feed with TTL cache
 - Admin insight management (requires `Authorization: Bearer $ADMIN_TOKEN`)
@@ -31,8 +31,8 @@ go test ./...
 | `INSIGHTS_CACHE_BUCKET` | No | - | GCS bucket for persisted AI insight cache |
 | `FLAGGED_INSIGHTS_BUCKET` | No | - | GCS bucket for flagged insight records |
 | `ADMIN_TOKEN` | No | - | Bearer token for admin routes (`/flagged-insights`) |
-| `ANTHROPIC_API_KEY` | No | - | Required for `/fetch-ai-insight` |
-| `ANTHROPIC_MODEL` | No | `claude-sonnet-4-5-20250929` | Anthropic model used for insight generation |
+| `GEMINI_API_KEY` | No | - | Required for `/fetch-ai-insight` |
+| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Gemini model used for insight generation |
 | `WEBFLOW_API_TOKEN` | No | - | Required for `/het-news` |
 | `INSIGHT_NEGATIVE_EXAMPLES_ENABLED` | No | `false` | Feed prior flagged outputs back into prompts |
 | `STATIC_DIR` | No | `/static` | Directory containing the React build |
@@ -45,7 +45,7 @@ The server handles all traffic on a single port:
 - **Data requests** (`/dataset`, `/metadata`): served from GCS via a 150 MB byte-aware LRU
   cache with a 2-hour TTL. NDJSON files are converted to JSON arrays on the fly.
 - **AI insights** (`/fetch-ai-insight`): checks a `sync.Map` in-process cache, then the GCS
-  persistent cache, then calls the Anthropic API directly and writes back to GCS.
+  persistent cache, then calls the Gemini API directly and writes back to GCS.
 - **Flagging** (`/flag-insight`): writes a flag record to GCS, deletes the cached insight, and
   clears the in-process `sync.Map` entry — all in the same process with no HTTP hops.
 - **News** (`/het-news`): fetches from the Webflow CDN API with a 5-minute TTL cache (tags
@@ -72,7 +72,7 @@ docker build -f server/Dockerfile --build-arg DEPLOY_CONTEXT=dev -t het-server .
 docker run -p 8080:8080 \
   -e GCS_BUCKET=het-bucket \
   -e METADATA_FILENAME=all_metadata.ndjson \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
+  -e GEMINI_API_KEY=... \
   -e WEBFLOW_API_TOKEN=... \
   het-server
 ```

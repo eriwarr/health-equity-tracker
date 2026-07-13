@@ -15,16 +15,16 @@ import (
 )
 
 const (
-	insightMemTTL       = 180 * 24 * time.Hour // 6 months
-	anthropicURL        = "https://api.anthropic.com/v1/messages"
-	anthropicModelDefault = "claude-sonnet-4-5-20250929"
+	insightMemTTL      = 180 * 24 * time.Hour // 6 months
+	geminiURLTemplate  = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
+	geminiModelDefault = "gemini-2.5-flash"
 )
 
-func anthropicModel() string {
-	if m := os.Getenv("ANTHROPIC_MODEL"); m != "" {
+func geminiModel() string {
+	if m := os.Getenv("GEMINI_MODEL"); m != "" {
 		return m
 	}
-	return anthropicModelDefault
+	return geminiModelDefault
 }
 
 // insightMemCache stores generated insights in-process to avoid redundant GCS reads.
@@ -153,10 +153,10 @@ func fetchAIInsightHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate with Anthropic API
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	// Generate with Gemini API
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		http.Error(w, `{"error":"Anthropic API key not configured"}`, http.StatusServiceUnavailable)
+		http.Error(w, `{"error":"Gemini API key not configured"}`, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -164,32 +164,35 @@ func fetchAIInsightHandler(w http.ResponseWriter, r *http.Request) {
 	finalPrompt := negExamples + prompt
 
 	reqBody, _ := json.Marshal(map[string]any{
-		"model":      anthropicModel(),
-		"max_tokens": 1024,
-		"system":     insightSystemPrompt,
-		"messages":   []map[string]string{{"role": "user", "content": finalPrompt}},
+		"systemInstruction": map[string]any{
+			"parts": []map[string]string{{"text": insightSystemPrompt}},
+		},
+		"contents": []map[string]any{
+			{"role": "user", "parts": []map[string]string{{"text": finalPrompt}}},
+		},
+		"generationConfig": map[string]any{"maxOutputTokens": 1024},
 	})
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicURL, bytes.NewReader(reqBody))
+	geminiURL := fmt.Sprintf(geminiURLTemplate, geminiModel())
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, geminiURL, bytes.NewReader(reqBody))
 	if err != nil {
 		log.Printf("[insight] build request error: %v", err)
 		http.Error(w, `{"error":"Failed to fetch AI insight"}`, http.StatusInternalServerError)
 		return
 	}
-	req.Header.Set("x-api-key", apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("x-goog-api-key", apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("[insight] Anthropic request error: %v", err)
+		log.Printf("[insight] Gemini request error: %v", err)
 		http.Error(w, `{"error":"Failed to fetch AI insight"}`, http.StatusInternalServerError)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		log.Print("[insight] Anthropic rate limit reached")
+		log.Print("[insight] Gemini rate limit reached")
 		w.WriteHeader(http.StatusTooManyRequests)
 		writeJSON(w, map[string]string{"error": "Rate limit reached"})
 		return
@@ -197,25 +200,29 @@ func fetchAIInsightHandler(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
-		log.Printf("[insight] Anthropic returned %d: %s", resp.StatusCode, b)
-		http.Error(w, `{"error":"Anthropic API error"}`, http.StatusInternalServerError)
+		log.Printf("[insight] Gemini returned %d: %s", resp.StatusCode, b)
+		http.Error(w, `{"error":"Gemini API error"}`, http.StatusInternalServerError)
 		return
 	}
 
-	var anthropicResp struct {
-		Content []struct {
-			Text string `json:"text"`
-		} `json:"content"`
+	var geminiResp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&anthropicResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
 		log.Printf("[insight] decode error: %v", err)
 		http.Error(w, `{"error":"Failed to decode insight"}`, http.StatusInternalServerError)
 		return
 	}
 
 	insightText := "No content returned"
-	if len(anthropicResp.Content) > 0 {
-		insightText = strings.TrimSpace(anthropicResp.Content[0].Text)
+	if len(geminiResp.Candidates) > 0 && len(geminiResp.Candidates[0].Content.Parts) > 0 {
+		insightText = strings.TrimSpace(geminiResp.Candidates[0].Content.Parts[0].Text)
 	}
 
 	insightMemCache.Store(cacheKey, insightMemEntry{content: insightText, ts: time.Now()})

@@ -133,11 +133,11 @@ resource "google_cloud_run_service" "server_service" {
           value = var.flagged_insights_bucket
         }
         env {
-          name = "ANTHROPIC_API_KEY"
+          name = "GEMINI_API_KEY"
           value_from {
             secret_key_ref {
               # Secret is created/rotated manually in Secret Manager (see secrets.tf).
-              name = "anthropic-api-key"
+              name = "gemini-api-key"
               key  = "latest"
             }
           }
