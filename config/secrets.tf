@@ -23,75 +23,7 @@
 #
 # Secrets and their consumers:
 #   ahr-api-key        -> gcs_to_bq runner  (America's Health Rankings ingestion)
-#   anthropic-api-key  -> frontend runner   (AI insight generation)
-#   webflow-api-token  -> frontend runner   (CMS blog read access)
-
-# --- Migration: hand the previously Terraform-managed secrets off to manual
-# management WITHOUT destroying them. These resources existed in state from the
-# earlier Terraform-managed design; `removed` with destroy=false drops them from
-# state while leaving the live secrets, versions, and IAM bindings intact in GCP.
-# Safe to delete these blocks in a future cleanup once all environments have applied.
-removed {
-  from = google_secret_manager_secret.ahr_api_key
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret_version.ahr_api_key
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret_iam_member.gcs_to_bq_ahr_api_key_accessor
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret.anthropic_api_key
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret_version.anthropic_api_key
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret_iam_member.frontend_anthropic_api_key_accessor
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret.webflow_api_token
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret_version.webflow_api_token
-  lifecycle {
-    destroy = false
-  }
-}
-
-removed {
-  from = google_secret_manager_secret_iam_member.frontend_webflow_api_token_accessor
-  lifecycle {
-    destroy = false
-  }
-}
+#   anthropic-api-key  -> data-server-runner SA / Go server  (AI insight generation)
+#   webflow-api-token  -> data-server-runner SA / Go server  (CMS blog read access)
 
 /* [END] Secret Manager Setup */
