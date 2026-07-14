@@ -17,7 +17,7 @@ import (
 const (
 	insightMemTTL      = 180 * 24 * time.Hour // 6 months
 	geminiURLTemplate  = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
-	geminiModelDefault = "gemini-2.5-flash"
+	geminiModelDefault = "gemini-3.5-flash"
 )
 
 func geminiModel() string {
@@ -199,7 +199,7 @@ func fetchAIInsightHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
 		log.Printf("[insight] Gemini returned %d: %s", resp.StatusCode, b)
 		http.Error(w, `{"error":"Gemini API error"}`, http.StatusInternalServerError)
 		return
@@ -214,32 +214,41 @@ func fetchAIInsightHandler(w http.ResponseWriter, r *http.Request) {
 			} `json:"content"`
 		} `json:"candidates"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1024*1024)).Decode(&geminiResp); err != nil {
 		log.Printf("[insight] decode error: %v", err)
 		http.Error(w, `{"error":"Failed to decode insight"}`, http.StatusInternalServerError)
 		return
 	}
 
 	insightText := "No content returned"
+	gotContent := false
 	if len(geminiResp.Candidates) > 0 && len(geminiResp.Candidates[0].Content.Parts) > 0 {
-		insightText = strings.TrimSpace(geminiResp.Candidates[0].Content.Parts[0].Text)
+		if text := strings.TrimSpace(geminiResp.Candidates[0].Content.Parts[0].Text); text != "" {
+			insightText = text
+			gotContent = true
+		}
 	}
 
-	insightMemCache.Store(cacheKey, insightMemEntry{content: insightText, ts: time.Now()})
+	// Only cache real content. An empty generation falls back to the placeholder
+	// above; caching it would replay the failure for the full TTL (6 months) instead
+	// of letting the next request regenerate.
+	if gotContent {
+		insightMemCache.Store(cacheKey, insightMemEntry{content: insightText, ts: time.Now()})
 
-	// Persist to GCS in a background goroutine — best effort, never block the response.
-	if cacheBucket != "" {
-		payload, _ := json.Marshal(map[string]any{
-			"content":   insightText,
-			"timestamp": time.Now().UnixMilli(),
-		})
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if err := uploadBlob(ctx, cacheBucket, "insights/"+cacheKey+".json", payload, "application/json"); err != nil {
-				log.Printf("[insight] GCS write error: %v", err)
-			}
-		}()
+		// Persist to GCS in a background goroutine — best effort, never block the response.
+		if cacheBucket != "" {
+			payload, _ := json.Marshal(map[string]any{
+				"content":   insightText,
+				"timestamp": time.Now().UnixMilli(),
+			})
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := uploadBlob(ctx, cacheBucket, "insights/"+cacheKey+".json", payload, "application/json"); err != nil {
+					log.Printf("[insight] GCS write error: %v", err)
+				}
+			}()
+		}
 	}
 
 	writeJSON(w, map[string]string{"content": insightText})

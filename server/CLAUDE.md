@@ -32,7 +32,7 @@ go test ./...
 | `FLAGGED_INSIGHTS_BUCKET` | No | - | GCS bucket for flagged insight records |
 | `ADMIN_TOKEN` | No | - | Bearer token for admin routes (`/flagged-insights`) |
 | `GEMINI_API_KEY` | No | - | Required for `/fetch-ai-insight` |
-| `GEMINI_MODEL` | No | `gemini-2.5-flash` | Gemini model used for insight generation |
+| `GEMINI_MODEL` | No | `gemini-3.5-flash` | Gemini model used for insight generation |
 | `WEBFLOW_API_TOKEN` | No | - | Required for `/het-news` |
 | `INSIGHT_NEGATIVE_EXAMPLES_ENABLED` | No | `false` | Feed prior flagged outputs back into prompts |
 | `STATIC_DIR` | No | `/static` | Directory containing the React build |
