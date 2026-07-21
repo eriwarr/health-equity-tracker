@@ -175,6 +175,25 @@ export interface InsightContext {
   selectedGroups?: DemographicGroup[]
 }
 
+// A stable suffix that changes when the user focuses the chart on a different
+// group (highlighted map group / selected trend-legend lines). Those are local
+// React state, not URL params, so without this the cache key would not change
+// and a re-focused chart would serve the stale insight from the prior focus.
+// Both the client-side insight cache and the server cache key derive from this
+// single source so they can never disagree about what "the same view" means.
+export function buildInsightFocusSuffix(context?: InsightContext): string {
+  return [
+    context?.activeDemographicGroup && context.activeDemographicGroup !== ALL
+      ? context.activeDemographicGroup
+      : '',
+    context?.selectedGroups?.length
+      ? [...context.selectedGroups].sort().join(',')
+      : '',
+  ]
+    .filter(Boolean)
+    .join('|')
+}
+
 // Shapes the chart's query response into the exact text the model is given.
 // Kept separate from generation so the UI can gate on entryCount up front,
 // guaranteeing the visibility check and the generated text never disagree.
@@ -261,7 +280,11 @@ export async function generateCardInsight(
   const params = new URLSearchParams(window.location.search)
   params.delete(REPORT_INSIGHT_PARAM_KEY)
   const cardSuffix = isCompareCard ? '-2' : ''
-  const cacheKey = `${window.location.pathname}?${params.toString()}#${hashId}${cardSuffix}`
+  // Focus (highlighted map group / selected trend lines) lives in React state,
+  // not the URL, so it must be folded into the key or the server returns the
+  // insight cached for the previous focus even though the prompt has changed.
+  const focusSuffix = buildInsightFocusSuffix(context)
+  const cacheKey = `${window.location.pathname}?${params.toString()}#${hashId}${cardSuffix}${focusSuffix ? `-${focusSuffix}` : ''}`
 
   const result = await fetchAIInsight(prompt, {
     cacheKey,
