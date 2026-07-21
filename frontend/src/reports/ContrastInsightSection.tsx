@@ -1,7 +1,9 @@
-import CompareArrows from '@mui/icons-material/CompareArrows'
-import { Button, CircularProgress, Tooltip } from '@mui/material'
+import AutoAwesome from '@mui/icons-material/AutoAwesome'
+import DeleteForever from '@mui/icons-material/DeleteForever'
+import { Button, CircularProgress, IconButton, Tooltip } from '@mui/material'
 import { useAtom, useAtomValue } from 'jotai'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import FlagInsightButton from '../cards/ui/FlagInsightButton'
 import type { DataTypeConfig } from '../data/config/MetricConfigTypes'
 import type { DemographicType } from '../data/query/Breakdowns'
 import type { Fips } from '../data/utils/Fips'
@@ -10,8 +12,10 @@ import { generateContrastInsight } from '../utils/generateContrastInsight'
 import type { ScrollableHashId } from '../utils/hooks/useStepObserver'
 import {
   cardQueryResponsesAtom,
+  contrastInsightOpenAtom,
   contrastInsightsAtom,
 } from '../utils/sharedSettingsState'
+import { reportProviderSteps } from './ReportProviderSteps'
 
 interface ContrastInsightSectionProps {
   hashId: ScrollableHashId
@@ -20,6 +24,7 @@ interface ContrastInsightSectionProps {
   fips1: Fips
   fips2: Fips
   demographicType: DemographicType
+  headerScrollMargin?: number
 }
 
 export default function ContrastInsightSection({
@@ -29,16 +34,20 @@ export default function ContrastInsightSection({
   fips1,
   fips2,
   demographicType,
+  headerScrollMargin,
 }: ContrastInsightSectionProps) {
   const cardQueryResponses = useAtomValue(cardQueryResponsesAtom)
   const [contrastInsights, setContrastInsights] = useAtom(contrastInsightsAtom)
-  // Local open state — same click-to-open pattern as per-card insights.
-  const [isOpen, setIsOpen] = useState(false)
+  const [contrastInsightOpen, setContrastInsightOpen] = useAtom(
+    contrastInsightOpenAtom,
+  )
+  const isOpen = contrastInsightOpen[hashId] ?? false
+  const articleRef = useRef<HTMLDivElement>(null)
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [serverCacheKey, setServerCacheKey] = useState<string | null>(null)
 
-  // Keys match what CardWrapper writes to cardQueryResponsesAtom: card 1 has
-  // no suffix, card 2 ('compare' card) appends '-2'.
   const card1Key = `${hashId}-${dataTypeConfig1.dataTypeId}-${fips1.code}-${demographicType}`
   const card2Key = `${hashId}-${dataTypeConfig2.dataTypeId}-${fips2.code}-${demographicType}-2`
   const queryResponses1 = cardQueryResponses[card1Key]
@@ -47,6 +56,13 @@ export default function ContrastInsightSection({
 
   const contrastCacheKey = `${hashId}-${dataTypeConfig1.dataTypeId}-${fips1.code}-${dataTypeConfig2.dataTypeId}-${fips2.code}-${demographicType}`
   const contrastInsight = contrastInsights[contrastCacheKey]
+
+  const stepInfo = reportProviderSteps[hashId]
+  const baseLabel = stepInfo?.label ?? hashId
+  const sectionLabel =
+    stepInfo?.pluralOnCompare && !baseLabel.endsWith('s')
+      ? `${baseLabel}s`
+      : baseLabel
 
   const handleGenerate = useCallback(async () => {
     if (!queryResponses1 || !queryResponses2) return
@@ -63,10 +79,11 @@ export default function ContrastInsightSection({
         queryResponses1,
         queryResponses2,
       )
+      setServerCacheKey(result.cacheKey ?? null)
       if (result.rateLimited) {
         setError('Too many requests. Please wait a moment and try again.')
       } else if (result.error) {
-        setError('Unable to generate contrast insight. Please try again.')
+        setError('Unable to generate comparison insights. Please try again.')
       } else {
         setContrastInsights((prev) => ({
           ...prev,
@@ -89,93 +106,98 @@ export default function ContrastInsightSection({
     setContrastInsights,
   ])
 
-  // Reset error when the cacheKey changes (user switched demographic, fips,
-  // etc.) — otherwise a stale error from old params would block generation
-  // for the new ones.
+  const handleFlagged = () => {
+    setContrastInsights((prev) => {
+      const next = { ...prev }
+      delete next[contrastCacheKey]
+      return next
+    })
+  }
+
+  const handleClose = () => {
+    setContrastInsightOpen((prev) => ({ ...prev, [hashId]: false }))
+    setTimeout(() => {
+      document
+        .querySelector<HTMLElement>('[aria-label="Comparison insights"]')
+        ?.focus()
+    }, 0)
+  }
+
   useEffect(() => {
     setError(null)
   }, [contrastCacheKey])
 
-  // Generate on open if we don't have a cached result. `error` is in the guard
-  // so a failed call doesn't get auto-retried — user must click Try again.
   useEffect(() => {
-    if (!isOpen) return
-    if (contrastInsight) return
-    if (isGenerating) return
-    if (error) return
-    if (!bothDataLoaded) return
+    if (!isOpen || contrastInsight || error || isGenerating || !bothDataLoaded)
+      return
     void handleGenerate()
   }, [
     isOpen,
     contrastInsight,
-    isGenerating,
     error,
+    isGenerating,
     bothDataLoaded,
     handleGenerate,
   ])
 
-  if (!SHOW_INSIGHT_GENERATION) return null
+  useEffect(() => {
+    if (!isOpen) return
+    articleRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [isOpen])
 
-  const buttonLabel = bothDataLoaded
-    ? 'Compare these views with AI'
-    : 'Loading card data…'
-
-  if (!isOpen) {
-    return (
-      <div className='mx-2 mb-2'>
-        <Tooltip title={buttonLabel}>
-          <span>
-            <Button
-              size='small'
-              startIcon={<CompareArrows />}
-              disabled={!bothDataLoaded}
-              onClick={() => setIsOpen(true)}
-            >
-              Compare these views
-            </Button>
-          </span>
-        </Tooltip>
-      </div>
-    )
-  }
+  if (!SHOW_INSIGHT_GENERATION || !isOpen) return null
 
   return (
-    <article className='relative m-2 animate-expand-down rounded-sm bg-alt-white p-3 shadow-raised'>
+    <div
+      ref={articleRef}
+      role='status'
+      aria-label={`${sectionLabel} comparison insight`}
+      style={{ scrollMarginTop: headerScrollMargin }}
+      className='relative m-2 animate-expand-down rounded-sm bg-alt-white p-3 shadow-raised'
+    >
       <div className='mb-2 flex items-center justify-between'>
-        <div className='flex items-center gap-2'>
-          <CompareArrows className='text-alt-dark' />
-          <span className='font-bold text-alt-dark'>
-            Comparing these two views
-          </span>
-        </div>
-        <Button size='small' onClick={() => setIsOpen(false)}>
-          Clear
-        </Button>
+        <p className='m-0 flex items-center gap-1 text-alt-dark text-smallest'>
+          <AutoAwesome sx={{ fontSize: 12 }} />
+          {sectionLabel} comparison
+        </p>
+        <Tooltip title='Close'>
+          <IconButton
+            size='small'
+            onClick={handleClose}
+            aria-label='Close comparison insights'
+          >
+            <DeleteForever fontSize='small' />
+          </IconButton>
+        </Tooltip>
       </div>
       {isGenerating ? (
-        <div className='flex items-center gap-2 py-1'>
+        <div className='flex items-center gap-2 rounded-md bg-footer-color p-3'>
           <CircularProgress size={14} className='shrink-0' />
-          <p className='m-0 text-alt-dark text-small'>
-            Analyzing the contrast with AI...
-          </p>
+          <p className='m-0 text-alt-dark text-small'>Analyzing with AI...</p>
         </div>
       ) : error ? (
-        <div className='flex flex-col gap-1'>
-          <p className='m-0 text-red-500 text-small'>{error}</p>
+        <div className='flex flex-col gap-1 rounded-md bg-footer-color p-3'>
+          <p className='m-0 text-red-orange text-small'>{error}</p>
           <Button size='small' onClick={handleGenerate}>
             Try again
           </Button>
         </div>
       ) : contrastInsight ? (
-        <>
+        <div className='rounded-md bg-footer-color p-3'>
           <p className='m-0 font-bold text-alt-dark leading-snug'>
             {contrastInsight}
           </p>
           <p className='m-0 mt-2 text-alt-dark text-smallest'>
-            AI-generated. Verify with chart data.
+            AI-generated. Verify with chart data.{' '}
+            <FlagInsightButton
+              cacheKey={serverCacheKey ?? undefined}
+              content={contrastInsight}
+              topic={dataTypeConfig1.dataTypeId}
+              onFlagged={handleFlagged}
+            />
           </p>
-        </>
+        </div>
       ) : null}
-    </article>
+    </div>
   )
 }
