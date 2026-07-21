@@ -13,6 +13,7 @@ import type { MapOfDatasetMetadata } from '../data/utils/DatasetTypes'
 import { getGeographiesDatasetId } from '../data/utils/datasetutils'
 import type { Fips } from '../data/utils/Fips'
 import { useCompareMode } from '../reports/CompareModeContext'
+import { reportProviderSteps } from '../reports/ReportProviderSteps'
 import { hasEnoughDataForInsight } from '../utils/generateVisualizationInsight'
 import type { ScrollableHashId } from '../utils/hooks/useStepObserver'
 import { cardQueryResponsesAtom } from '../utils/sharedSettingsState'
@@ -134,7 +135,7 @@ function CardWrapper(props: {
           overrideCardHasData,
         )
 
-        // Only offer an insight when there are at least two values to compare.
+        // Only offer a per-card insight when there are at least two values to compare.
         // A single group or region has no disparity to describe.
         const showInsight =
           insightProps != null &&
@@ -146,6 +147,13 @@ function CardWrapper(props: {
             queryResponses,
             insightProps.selectedGroups,
           )
+
+        // In compare mode, show the sparkle only for sections that have a ContrastInsightSection.
+        const showContrastInsightButton =
+          inCompareMode &&
+          cardHasData &&
+          insightProps != null &&
+          (reportProviderSteps[props.scrollToHash]?.hasContrastSection ?? false)
 
         return (
           <article
@@ -162,7 +170,7 @@ function CardWrapper(props: {
               />
             )}
             <div className='absolute top-2 right-2 flex items-center'>
-              {cardHasData && showInsight && insightProps && (
+              {(showInsight || showContrastInsightButton) && insightProps && (
                 <InsightVisualizationButton
                   scrollToHash={props.scrollToHash}
                   isCompareCard={insightProps.isCompareCard}
