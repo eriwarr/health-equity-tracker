@@ -7,6 +7,7 @@ import type { MetricQueryResponse } from '../../data/query/MetricQuery'
 import type { DemographicGroup } from '../../data/utils/Constants'
 import type { Fips } from '../../data/utils/Fips'
 import { SHOW_INSIGHT_GENERATION } from '../../featureFlags'
+import type { GeoComparisonRow } from '../../utils/generateVisualizationInsight'
 import {
   buildInsightFocusSuffix,
   generateCardInsight,
@@ -27,6 +28,9 @@ interface InsightVisualizationCardProps {
   isCompareCard?: boolean
   activeDemographicGroup?: DemographicGroup
   selectedGroups?: DemographicGroup[]
+  // Parent-geography reference rates for a single-region map fallback (see
+  // CardWrapper). Passed through to the insight prompt as comparison context.
+  geoComparison?: GeoComparisonRow[]
 }
 
 export default function InsightVisualizationCard({
@@ -38,6 +42,7 @@ export default function InsightVisualizationCard({
   isCompareCard,
   activeDemographicGroup,
   selectedGroups,
+  geoComparison,
 }: InsightVisualizationCardProps) {
   const [cardInsights, setCardInsights] = useAtom(cardInsightsAtom)
   const openKey = `${scrollToHash}${isCompareCard ? '-2' : ''}`
@@ -69,7 +74,7 @@ export default function InsightVisualizationCard({
         fips,
         queryResponses,
         isCompareCard,
-        { activeDemographicGroup, selectedGroups },
+        { activeDemographicGroup, selectedGroups, geoComparison },
       )
       setServerCacheKey(result.cacheKey ?? null)
       if (result.rateLimited) {
@@ -93,6 +98,7 @@ export default function InsightVisualizationCard({
     setCardInsights,
     activeDemographicGroup,
     selectedGroups,
+    geoComparison,
   ])
 
   const handleFlagged = () => {

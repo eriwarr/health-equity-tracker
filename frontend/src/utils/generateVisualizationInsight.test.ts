@@ -7,7 +7,8 @@ import type { HetRow } from '../data/utils/DatasetTypes'
 import {
   buildInsightFocusSuffix,
   formatDataRows,
-  hasEnoughDataForInsight,
+  formatGeoComparisonRows,
+  getInsightDataStatus,
   prepareInsightData,
 } from './generateVisualizationInsight'
 
@@ -148,38 +149,61 @@ describe('prepareInsightData', () => {
   })
 })
 
-describe('hasEnoughDataForInsight', () => {
-  test('false when only one group has data (nothing to compare)', () => {
-    const response = new MetricQueryResponse([
-      {
-        fips_name: 'Bartow County',
-        race_and_ethnicity: 'White (NH)',
-        rate: 13,
-      },
-    ])
+describe('getInsightDataStatus', () => {
+  const oneRow = new MetricQueryResponse([
+    { fips_name: 'Bartow County', race_and_ethnicity: 'All', rate: 13 },
+  ])
+  const twoRows = new MetricQueryResponse([
+    { fips_name: 'Fulton County', race_and_ethnicity: 'All', rate: 9 },
+    { fips_name: 'Bartow County', race_and_ethnicity: 'All', rate: 13 },
+  ])
+  const empty = new MetricQueryResponse([])
+
+  test("'multi' when two or more values are present", () => {
     expect(
-      hasEnoughDataForInsight('data-table', dataTypeConfig, DEMO, [response]),
-    ).toBe(false)
+      getInsightDataStatus('rate-map', dataTypeConfig, DEMO, [twoRows]),
+    ).toBe('multi')
   })
 
-  test('true when two or more groups have data', () => {
-    const response = new MetricQueryResponse([
-      { fips_name: 'Bartow County', race_and_ethnicity: 'Black (NH)', rate: 9 },
-      {
-        fips_name: 'Bartow County',
-        race_and_ethnicity: 'White (NH)',
-        rate: 13,
-      },
-    ])
+  test("'single-region' when a map has exactly one value", () => {
     expect(
-      hasEnoughDataForInsight('data-table', dataTypeConfig, DEMO, [response]),
-    ).toBe(true)
+      getInsightDataStatus('rate-map', dataTypeConfig, DEMO, [oneRow]),
+    ).toBe('single-region')
   })
 
-  test('false when there is no query response at all', () => {
+  test("a single value on a non-map chart is 'empty', not 'single-region'", () => {
+    // The parent-geography fallback only makes sense for maps, so a lone
+    // value elsewhere stays hidden.
     expect(
-      hasEnoughDataForInsight('data-table', dataTypeConfig, DEMO, undefined),
-    ).toBe(false)
+      getInsightDataStatus('data-table', dataTypeConfig, DEMO, [oneRow]),
+    ).toBe('empty')
+  })
+
+  test("'empty' when there is no usable data", () => {
+    expect(
+      getInsightDataStatus('rate-map', dataTypeConfig, DEMO, [empty]),
+    ).toBe('empty')
+  })
+
+  test("'empty' when there is no query response at all", () => {
+    expect(
+      getInsightDataStatus('rate-map', dataTypeConfig, DEMO, undefined),
+    ).toBe('empty')
+  })
+})
+
+describe('formatGeoComparisonRows', () => {
+  test('formats reference rates as prompt bullet lines', () => {
+    expect(
+      formatGeoComparisonRows([
+        { label: 'Georgia (All)', value: 9.4, shortLabel: 'per 100k' },
+        { label: 'United States (All)', value: 7.8, shortLabel: 'per 100k' },
+      ]),
+    ).toBe('- Georgia (All): 9.4 per 100k\n- United States (All): 7.8 per 100k')
+  })
+
+  test('empty input yields an empty string', () => {
+    expect(formatGeoComparisonRows([])).toBe('')
   })
 })
 

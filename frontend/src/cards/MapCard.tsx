@@ -52,10 +52,12 @@ import {
   getExtremeValues,
 } from '../data/utils/datasetutils'
 import { Fips } from '../data/utils/Fips'
+import { SHOW_INSIGHT_GENERATION } from '../featureFlags'
 import HetDivider from '../styles/HetComponents/HetDivider'
 import HetLinkButton from '../styles/HetComponents/HetLinkButton'
 import HetNotice from '../styles/HetComponents/HetNotice'
 import HetTerm from '../styles/HetComponents/HetTerm'
+import type { GeoComparisonRow } from '../utils/generateVisualizationInsight'
 import { useGuessPreloadHeight } from '../utils/hooks/useGuessPreloadHeight'
 import { useIsBreakpointAndUp } from '../utils/hooks/useIsBreakpointAndUp'
 import { useParamState } from '../utils/hooks/useParamState'
@@ -260,6 +262,55 @@ function MapCardWithKey(props: MapCardProps) {
     queries.push(sviQuery)
   }
 
+  // A county map shows one region, so when every group but "All" is suppressed
+  // there is nothing local to compare. Fetch the parent state and national
+  // rates so the AI insight can place the county in geographic context instead
+  // of hiding. Gated on the feature flag and county level to avoid extra
+  // fetches everywhere else. Indices are captured so the extraction callback
+  // below can pull the right responses regardless of the earlier conditionals.
+  let parentGeoInsightIndex = -1
+  let nationalInsightIndex = -1
+  if (SHOW_INSIGHT_GENERATION && props.fips.isCounty()) {
+    parentGeoInsightIndex = queries.length
+    queries.push(
+      metricQuery(
+        initialMetridIds,
+        Breakdowns.forFips(props.fips.getParentFips()),
+      ),
+    )
+    nationalInsightIndex = queries.length
+    queries.push(metricQuery(initialMetridIds, Breakdowns.national()))
+  }
+
+  const getInsightGeoComparison = (
+    responses: MetricQueryResponse[],
+  ): GeoComparisonRow[] | undefined => {
+    if (parentGeoInsightIndex < 0) return undefined
+    const rows: GeoComparisonRow[] = []
+    const pushAllRate = (
+      response: MetricQueryResponse | undefined,
+      label: string,
+    ) => {
+      const allRow = response
+        ?.getValidRowsForField(metricConfig.metricId)
+        .find((row) => row[demographicType] === ALL)
+      const value = allRow?.[metricConfig.metricId]
+      if (typeof value === 'number') {
+        rows.push({
+          label: `${label} (${ALL})`,
+          value,
+          shortLabel: metricConfig.shortLabel,
+        })
+      }
+    }
+    pushAllRate(
+      responses[parentGeoInsightIndex],
+      props.fips.getParentFips().getDisplayName(),
+    )
+    pushAllRate(responses[nationalInsightIndex], 'United States')
+    return rows.length > 0 ? rows : undefined
+  }
+
   let selectedRaceSuffix = ''
   if (
     CAWP_METRICS.includes(metricConfig.metricId) &&
@@ -315,6 +366,7 @@ function MapCardWithKey(props: MapCardProps) {
       dataTypeConfig={props.dataTypeConfig}
       demographicType={props.demographicType}
       activeDemographicGroup={activeDemographicGroup}
+      getInsightGeoComparison={getInsightGeoComparison}
     >
       {(queryResponses, metadata, geoData, overrideCardHasData) => {
         // contains rows for sub-geos (if viewing US, this data will be STATE level)

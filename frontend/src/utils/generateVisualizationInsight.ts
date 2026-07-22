@@ -129,8 +129,16 @@ function buildPrompt(
   demographicLabel: string,
   dataSection: string,
   activeDemographicGroup?: DemographicGroup,
+  // When set, the map has only one local value and dataSection carries that
+  // value plus parent state/national reference rates: reframe from "describe
+  // the disparity" to "place this place in context against state and nation".
+  useGeoContextFraming?: boolean,
 ): string {
   const dataBlock = dataSection ? `\n\nData:\n${dataSection}` : ''
+
+  if (MAP_CHART_IDS.includes(hashId) && useGeoContextFraming) {
+    return `This is a choropleth map of ${topic} in ${location}. Only the overall ("All") rate is available for this place, so it is shown alongside its state and national averages for context.${dataBlock}\n\nWrite a single sentence at an 8th grade reading level that places ${location} in context against its state and the national average — say whether its rate is higher or lower and by roughly how much, and what that means for the people who live there. Focus on the "so what", not the chart mechanics.`
+  }
 
   if (MAP_CHART_IDS.includes(hashId)) {
     // Each data row is labeled `Place (Group)`, and an "All" row gives the
@@ -165,6 +173,15 @@ interface InsightData {
   entryCount: number
 }
 
+// One reference rate (e.g. the parent state or the national average) shown
+// alongside a single-region map so the model has something to compare against.
+export interface GeoComparisonRow {
+  // Human-readable label, e.g. "Georgia (All)" or "United States (All)".
+  label: string
+  value: number
+  shortLabel: string
+}
+
 // Optional context about which groups the user has focused the chart on.
 export interface InsightContext {
   // The demographic group currently highlighted on a map (e.g. the active
@@ -173,6 +190,18 @@ export interface InsightContext {
   // The subset of groups the user has selected (e.g. via the trend legend).
   // Filters the rows the model sees so the insight matches what is on screen.
   selectedGroups?: DemographicGroup[]
+  // Parent-geography reference rates (state + national) supplied when a map
+  // shows a single region with only one usable value. Lets the insight place
+  // that lone rate in context instead of hiding. See getInsightDataStatus.
+  geoComparison?: GeoComparisonRow[]
+}
+
+// Renders parent-geography reference rates as prompt bullet lines, matching the
+// `- Label: value shortLabel` shape formatDataRows produces for the local row.
+export function formatGeoComparisonRows(rows: GeoComparisonRow[]): string {
+  return rows
+    .map((row) => `- ${row.label}: ${row.value} ${row.shortLabel}`)
+    .join('\n')
 }
 
 // A stable suffix that changes when the user focuses the chart on a different
@@ -224,27 +253,32 @@ export function prepareInsightData(
   return { dataSection, entryCount }
 }
 
-// An insight is only worth showing when there are at least two values to
-// compare. With a single group or region (e.g. a county where every other
-// race is suppressed, leaving only the "All" row), there is no disparity to
-// describe, so the card hides the insight UI entirely rather than restating
-// one number.
-export function hasEnoughDataForInsight(
+// How much comparison an insight has to work with:
+// - 'multi'         — two or more values; describe the disparity directly.
+// - 'single-region' — exactly one value on a map (e.g. a county where every
+//                     other group is suppressed, leaving only "All"). Nothing
+//                     local to compare, but a parent-geography fallback can
+//                     still place it against its state and the nation.
+// - 'empty'         — nothing usable (suppressed/missing); hide the insight.
+export type InsightDataStatus = 'multi' | 'single-region' | 'empty'
+
+export function getInsightDataStatus(
   hashId: ScrollableHashId,
   dataTypeConfig: DataTypeConfig,
   demographicType: DemographicType,
   queryResponses?: MetricQueryResponse[],
   selectedGroups?: DemographicGroup[],
-): boolean {
-  return (
-    prepareInsightData(
-      hashId,
-      dataTypeConfig,
-      demographicType,
-      queryResponses,
-      selectedGroups,
-    ).entryCount >= 2
+): InsightDataStatus {
+  const { entryCount } = prepareInsightData(
+    hashId,
+    dataTypeConfig,
+    demographicType,
+    queryResponses,
+    selectedGroups,
   )
+  if (entryCount >= 2) return 'multi'
+  if (entryCount === 1 && MAP_CHART_IDS.includes(hashId)) return 'single-region'
+  return 'empty'
 }
 
 export async function generateCardInsight(
@@ -260,7 +294,7 @@ export async function generateCardInsight(
   const location = fips?.getSentenceDisplayName() ?? 'the United States'
   const demographic = DEMOGRAPHIC_DISPLAY_TYPES_LOWER_CASE[demographicType]
 
-  const { dataSection } = prepareInsightData(
+  const { dataSection, entryCount } = prepareInsightData(
     hashId,
     dataTypeConfig,
     demographicType,
@@ -268,13 +302,27 @@ export async function generateCardInsight(
     context?.selectedGroups,
   )
 
+  // Single-region map with only one local value: append the parent state and
+  // national reference rates so the model has something to compare against.
+  const useGeoContextFraming =
+    MAP_CHART_IDS.includes(hashId) &&
+    entryCount === 1 &&
+    Boolean(context?.geoComparison?.length)
+
+  const finalDataSection = useGeoContextFraming
+    ? [dataSection, formatGeoComparisonRows(context!.geoComparison!)]
+        .filter(Boolean)
+        .join('\n')
+    : dataSection
+
   const prompt = buildPrompt(
     hashId,
     topic,
     location,
     demographic,
-    dataSection,
+    finalDataSection,
     context?.activeDemographicGroup,
+    useGeoContextFraming,
   )
 
   const params = new URLSearchParams(window.location.search)
