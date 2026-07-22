@@ -32,6 +32,7 @@ import type { ScrollableHashId } from '../utils/hooks/useStepObserver'
 import CardWrapper from './CardWrapper'
 import ChartTitle, { getChartTitleId } from './ChartTitle'
 import UnknownPctRateGradient from './UnknownPctRateGradient'
+import AllsFallbackAlert from './ui/AllsFallbackAlert'
 import AltTableView from './ui/AltTableView'
 import Hiv2020Alert from './ui/Hiv2020Alert'
 import MissingDataAlert from './ui/MissingDataAlert'
@@ -101,9 +102,29 @@ export default function RateTrendsChartCard(props: RateTrendsChartCardProps) {
       /* timeView */ 'historical',
     )
 
+  const rateComparisonConfig = metricConfigRates?.rateComparisonMetricForAlls
+
   const queries = [ratesQuery]
 
   pctShareQuery && queries.push(pctShareQuery)
+
+  // For intersectional topics (e.g. HIV prevalence for Black women), fetch a
+  // second historical series for the reference "All" population so the trend
+  // chart can show both lines, mirroring what the rate bar card already does.
+  const allsQueryIndex = queries.length
+  if (rateComparisonConfig && props.dataTypeConfig.rateComparisonDataTypeId) {
+    const breakdownsForAlls = Breakdowns.forFips(props.fips).addBreakdown(
+      'sex',
+      exclude('Male', 'Female'),
+    )
+    const allsRateQuery = new MetricQuery(
+      [rateComparisonConfig.metricId],
+      breakdownsForAlls,
+      props.dataTypeConfig.rateComparisonDataTypeId,
+      'historical',
+    )
+    queries.push(allsRateQuery)
+  }
 
   function getTitleText() {
     return `${
@@ -141,15 +162,41 @@ export default function RateTrendsChartCard(props: RateTrendsChartCardProps) {
       demographicType={props.demographicType}
       selectedGroups={selectedTableGroups}
     >
-      {(
-        [queryResponseRates, queryResponsePctShares],
-        _metadata,
-        _geoData,
-        overrideCardHasData,
-      ) => {
+      {(queryResponses, _metadata, _geoData, overrideCardHasData) => {
+        const [queryResponseRates, queryResponsePctShares] = queryResponses
+        const queryResponseRatesAlls = rateComparisonConfig
+          ? queryResponses[allsQueryIndex]
+          : undefined
+
         let ratesData = queryResponseRates.getValidRowsForField(
           metricConfigRates.metricId,
         )
+
+        // For intersectional topics, rename the "All" group in the main data
+        // (e.g. "All" → "All Black Women Ages 13+") and prepend a reference
+        // "All" people series from the comparison dataset, giving two lines.
+        if (rateComparisonConfig && queryResponseRatesAlls) {
+          ratesData = ratesData.map((row) =>
+            row[props.demographicType] === ALL
+              ? {
+                  ...row,
+                  [props.demographicType]: rateComparisonConfig.shortLabel,
+                }
+              : row,
+          )
+          const allsRows = queryResponseRatesAlls.getValidRowsForField(
+            rateComparisonConfig.metricId,
+          )
+          const referenceRows: HetRow[] = allsRows.map((allsRow) => ({
+            fips: allsRow.fips,
+            fips_name: allsRow.fips_name,
+            [TIME_PERIOD]: allsRow[TIME_PERIOD],
+            [props.demographicType]: ALL,
+            [metricConfigRates.metricId]:
+              allsRow[rateComparisonConfig.metricId],
+          }))
+          ratesData = [...referenceRows, ...ratesData]
+        }
 
         // TODO: this is a stop-gap to deal with sketchy data. we should solve a different way
         if (
@@ -176,12 +223,21 @@ export default function RateTrendsChartCard(props: RateTrendsChartCardProps) {
             })
           : ratesData
 
-        // retrieve list of all present demographic groups
-        const allDemographicGroups: DemographicGroup[] =
-          queryResponseRates.getFieldValues(
-            props.demographicType,
-            metricConfigRates.metricId,
-          ).withData
+        // retrieve list of all present demographic groups; for intersectional
+        // topics the merged ratesData already contains both "All" and the
+        // renamed label, so derive groups from the data rather than the response.
+        const allDemographicGroups: DemographicGroup[] = rateComparisonConfig
+          ? [
+              ...new Set(
+                ratesData
+                  .map((row) => row[props.demographicType] as DemographicGroup)
+                  .filter(Boolean),
+              ),
+            ]
+          : queryResponseRates.getFieldValues(
+              props.demographicType,
+              metricConfigRates.metricId,
+            ).withData
 
         const demographicGroups = isCawpStateLeg
           ? allDemographicGroups
@@ -260,6 +316,12 @@ export default function RateTrendsChartCard(props: RateTrendsChartCardProps) {
               <>
                 {/* ensure we don't render two of these in compare mode */}
                 {!props.isCompareCard && <UnknownPctRateGradient />}
+                {queryResponseRates.usedAllsFallback && (
+                  <AllsFallbackAlert
+                    dataName={props.dataTypeConfig.fullDisplayName}
+                    demographicType={props.demographicType}
+                  />
+                )}
                 <TrendsChart
                   chartTitleId={getChartTitleId(HASH_ID, props.isCompareCard)}
                   data={nestedRatesData}

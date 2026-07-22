@@ -648,6 +648,7 @@ function MapCardWithKey(props: MapCardProps) {
                       ) : null
                     }
                   />
+
                   {isGeorgiaWithCountyData && !isExtremesMode && (
                     <div className='flex justify-center'>
                       <HetLinkButton

@@ -5,6 +5,7 @@ import type {
 import { MetricQueryResponse } from '../data/query/MetricQuery'
 import type { HetRow } from '../data/utils/DatasetTypes'
 import {
+  buildInsightFocusSuffix,
   formatDataRows,
   hasEnoughDataForInsight,
   prepareInsightData,
@@ -179,5 +180,44 @@ describe('hasEnoughDataForInsight', () => {
     expect(
       hasEnoughDataForInsight('data-table', dataTypeConfig, DEMO, undefined),
     ).toBe(false)
+  })
+})
+
+describe('buildInsightFocusSuffix', () => {
+  test('empty when no context is given', () => {
+    expect(buildInsightFocusSuffix()).toBe('')
+    expect(buildInsightFocusSuffix({})).toBe('')
+  })
+
+  test('ignores an activeDemographicGroup of "All"', () => {
+    expect(buildInsightFocusSuffix({ activeDemographicGroup: 'All' })).toBe('')
+  })
+
+  test('includes a non-All highlighted map group', () => {
+    expect(
+      buildInsightFocusSuffix({ activeDemographicGroup: 'Black (NH)' }),
+    ).toBe('Black (NH)')
+  })
+
+  test('sorts selectedGroups so legend order does not change the key', () => {
+    expect(
+      buildInsightFocusSuffix({ selectedGroups: ['White (NH)', 'Black (NH)'] }),
+    ).toBe('Black (NH),White (NH)')
+    expect(
+      buildInsightFocusSuffix({ selectedGroups: ['Black (NH)', 'White (NH)'] }),
+    ).toBe('Black (NH),White (NH)')
+  })
+
+  test('combines highlighted group and selected groups with a pipe', () => {
+    expect(
+      buildInsightFocusSuffix({
+        activeDemographicGroup: 'Black (NH)',
+        selectedGroups: ['White (NH)', 'Asian (NH)'],
+      }),
+    ).toBe('Black (NH)|Asian (NH),White (NH)')
+  })
+
+  test('empty selectedGroups array contributes nothing', () => {
+    expect(buildInsightFocusSuffix({ selectedGroups: [] })).toBe('')
   })
 })

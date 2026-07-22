@@ -20,6 +20,21 @@ npm run e2e statins.nightly.spec.ts
 npm run e2e hiv          # Matches any filename containing "hiv"
 ```
 
+**Important: Package Dependency Workflow**
+
+Any time you modify `package.json` (add, remove, or update packages), you must run `npm install` afterward and **commit the resulting lock file changes**. The lock file must always be in sync with package.json, or CI's `npm ci` step will fail with "package-lock.json or npm-shrinkwrap.json are not in sync."
+
+```bash
+# After modifying package.json
+npm install               # Resolves full dependency tree and updates package-lock.json
+git add frontend/package-lock.json
+git commit -m "chore(deps): update lock file"
+```
+
+If you forget and push without updating the lock file, the CI will fail. If that happens, pull the latest, run `npm install`, and commit the lock file fix.
+
+**You must use npm >= 11.16.0 (matching CI).** Older npm writes lock files that omit hoisted transitive entries (e.g. `@emnapi/core`), which newer npm's stricter `npm ci` rejects as out of sync. `frontend/.npmrc` sets `engine-strict=true` and `package.json` pins `engines.npm`, so an under-versioned npm fails fast with a bad-engine error instead of silently corrupting the lock file. Upgrade with `npm install -g npm@latest` if blocked.
+
 > **CI note:** In CI, e2e tests run against `vite preview` serving the locally-built `dist/`
 > (not a Netlify preview URL). `VITE_BASE_API_URL` still points to the live dev GCP backend.
 >
@@ -40,8 +55,13 @@ URL params (mls, dt1, demo, etc.)
       → DataManager (src/data/loading/DataManager.ts) — LRU cache
         → VariableProvider (per-topic, src/data/providers/)
           → JSON fetch from server (Go server GCS proxy)
-            → MetricQueryResponse → Cards render charts
+            → MetricQueryResponse {data, consumedDatasetIds, usedAllsFallback}
+              → Cards render charts, surface fallback alert when needed
 ```
+
+Each `VariableProvider` computes `usedAllsFallback` via `resolveDatasetId()` when the requested demographic dataset is not registered but its `alls_` fallback is (see `MetricQuery.ts`). The flag flows through `DataManager` into `MetricQueryResponse` and informs whether cards render `AllsFallbackAlert` (bar, trend, and table cards show it; the map card does not, since showing the overall rate is its default behavior) and which card-level features are available (e.g., compare mode fallback behavior).
+
+For intersectional topics (e.g. HIV prevalence for Black women), `MetricConfig.metrics.per100k.rateComparisonMetricForAlls` names a second metric from a reference dataset. `RateBarChartCard` and `RateTrendsChartCard` both detect this field, issue a second `MetricQuery` for the reference "All" population, and merge the result into the chart data so a comparison series renders alongside the intersectional group. The `shortLabel` on `rateComparisonMetricForAlls` is typed as `DemographicGroup` (via `ComparisonMetricConfig`) — add the label as a named constant in `Constants.ts` and include it in `INTERSECTIONAL_COMPARISON_LABELS` so `GROUP_COLOR_MAP` can key on it with the correct color.
 
 Global UI state is managed with Jotai atoms, URL-synced via `jotai-location` (`src/utils/sharedSettingsState.ts`).
 

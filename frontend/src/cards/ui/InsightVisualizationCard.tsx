@@ -4,10 +4,13 @@ import { useCallback, useEffect, useState } from 'react'
 import type { DataTypeConfig } from '../../data/config/MetricConfigTypes'
 import type { DemographicType } from '../../data/query/Breakdowns'
 import type { MetricQueryResponse } from '../../data/query/MetricQuery'
-import { ALL, type DemographicGroup } from '../../data/utils/Constants'
+import type { DemographicGroup } from '../../data/utils/Constants'
 import type { Fips } from '../../data/utils/Fips'
 import { SHOW_INSIGHT_GENERATION } from '../../featureFlags'
-import { generateCardInsight } from '../../utils/generateVisualizationInsight'
+import {
+  buildInsightFocusSuffix,
+  generateCardInsight,
+} from '../../utils/generateVisualizationInsight'
 import type { ScrollableHashId } from '../../utils/hooks/useStepObserver'
 import {
   cardInsightOpenAtom,
@@ -46,17 +49,12 @@ export default function InsightVisualizationCard({
 
   // A stable suffix so the insight regenerates when the user changes which
   // group(s) the chart is focused on (highlighted map group / selected trend
-  // legend lines) — those change the data the model sees.
-  const focusSuffix = [
-    activeDemographicGroup && activeDemographicGroup !== ALL
-      ? activeDemographicGroup
-      : '',
-    selectedGroups && selectedGroups.length > 0
-      ? [...selectedGroups].sort().join(',')
-      : '',
-  ]
-    .filter(Boolean)
-    .join('|')
+  // legend lines) — those change the data the model sees. Shared with the server
+  // cache key in generateCardInsight so both caches key on focus identically.
+  const focusSuffix = buildInsightFocusSuffix({
+    activeDemographicGroup,
+    selectedGroups,
+  })
   const cacheKey = `${scrollToHash}-${dataTypeConfig.dataTypeId}-${fips.code}-${demographicType}${isCompareCard ? '-2' : ''}${focusSuffix ? `-${focusSuffix}` : ''}`
   const insight = cardInsights[cacheKey]
 
@@ -139,7 +137,7 @@ export default function InsightVisualizationCard({
         </div>
       ) : error ? (
         <div className='flex flex-col gap-1'>
-          <p className='m-0 text-red-500 text-small'>{error}</p>
+          <p className='m-0 text-red-orange text-small'>{error}</p>
           <Button size='small' onClick={handleGenerate}>
             Try again
           </Button>

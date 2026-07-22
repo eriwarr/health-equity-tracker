@@ -71,7 +71,7 @@ export const AHR_METRICS: MetricId[] = [
   'diabetes_per_100k',
   'diabetes_estimated_total',
   'excessive_drinking_pct_share',
-  'excessive_drinking_per_100k',
+  'excessive_drinking_pct_rate',
   'excessive_drinking_estimated_total',
   'frequent_mental_distress_pct_share',
   'frequent_mental_distress_per_100k',
@@ -109,7 +109,7 @@ const CHR_METRICS: MetricId[] = [
   'suicide_per_100k',
   'voter_participation_pct_rate',
   'diabetes_per_100k',
-  'excessive_drinking_per_100k',
+  'excessive_drinking_pct_rate',
   'frequent_mental_distress_per_100k',
   'preventable_hospitalizations_per_100k',
 ] // TODO: Gun deaths are also from CHR but are loaded via the GunViolenceProvider not here. Should improve this somehow
@@ -167,10 +167,15 @@ class AhrProvider extends VariableProvider {
       df = this.castAllsAsRequestedDemographicBreakdown(df, breakdowns)
     } else {
       df = this.applyDemographicBreakdownFilters(df, breakdowns)
-      df = this.removeUnrequestedColumns(df, metricQuery)
     }
+    df = this.removeUnrequestedColumns(df, metricQuery)
 
-    return new MetricQueryResponse(df, consumedDatasetIds)
+    return new MetricQueryResponse(
+      df,
+      consumedDatasetIds,
+      undefined,
+      !!isFallbackId,
+    )
   }
 
   allowsBreakdowns(breakdowns: Breakdowns, metricIds?: MetricId[]): boolean {
