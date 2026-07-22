@@ -6,6 +6,7 @@ import { MetricQueryResponse } from '../data/query/MetricQuery'
 import type { HetRow } from '../data/utils/DatasetTypes'
 import {
   buildInsightFocusSuffix,
+  buildPrompt,
   formatDataRows,
   formatGeoComparisonRows,
   getInsightDataStatus,
@@ -243,5 +244,34 @@ describe('buildInsightFocusSuffix', () => {
 
   test('empty selectedGroups array contributes nothing', () => {
     expect(buildInsightFocusSuffix({ selectedGroups: [] })).toBe('')
+  })
+})
+
+describe('buildPrompt geo-context framing', () => {
+  const args = [
+    'rate-map',
+    'Gun Deaths',
+    'Bartow County, Georgia',
+    'race and ethnicity',
+    '- Bartow County (All): 13 per 100k\n- United States (All): 7.8 per 100k',
+  ] as const
+
+  test('names state and national only when both reference rates are present', () => {
+    const prompt = buildPrompt(...args, undefined, 2)
+    expect(prompt).toContain('its state and national averages')
+    expect(prompt).toContain('against its state and the national average')
+  })
+
+  test('does not claim state and national when only one reference rate resolved', () => {
+    const prompt = buildPrompt(...args, undefined, 1)
+    expect(prompt).not.toContain('state and national')
+    expect(prompt).not.toContain('the national average')
+    expect(prompt).toContain('the reference average shown')
+  })
+
+  test('falls back to the standard disparity framing when no reference rates exist', () => {
+    const prompt = buildPrompt(...args, undefined, 0)
+    expect(prompt).not.toContain('reference average')
+    expect(prompt).toContain('most important health equity disparity')
   })
 })

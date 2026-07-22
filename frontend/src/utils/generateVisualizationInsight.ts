@@ -122,22 +122,34 @@ export function formatDataRows(
     .join('\n')
 }
 
-function buildPrompt(
+export function buildPrompt(
   hashId: ScrollableHashId,
   topic: string,
   location: string,
   demographicLabel: string,
   dataSection: string,
   activeDemographicGroup?: DemographicGroup,
-  // When set, the map has only one local value and dataSection carries that
-  // value plus parent state/national reference rates: reframe from "describe
-  // the disparity" to "place this place in context against state and nation".
-  useGeoContextFraming?: boolean,
+  // How many parent-geography reference rates (state and/or national) are in
+  // dataSection. When > 0 the map has only one local value, so reframe from
+  // "describe the disparity" to "place this place in context". The count drives
+  // the wording so the prompt only claims the reference rates actually present.
+  geoComparisonCount = 0,
 ): string {
   const dataBlock = dataSection ? `\n\nData:\n${dataSection}` : ''
 
-  if (MAP_CHART_IDS.includes(hashId) && useGeoContextFraming) {
-    return `This is a choropleth map of ${topic} in ${location}. Only the overall ("All") rate is available for this place, so it is shown alongside its state and national averages for context.${dataBlock}\n\nWrite a single sentence at an 8th grade reading level that places ${location} in context against its state and the national average — say whether its rate is higher or lower and by roughly how much, and what that means for the people who live there. Focus on the "so what", not the chart mechanics.`
+  if (MAP_CHART_IDS.includes(hashId) && geoComparisonCount > 0) {
+    // getInsightGeoComparison adds a reference row only when that geography's
+    // rate resolves, so the data block may hold the state, the nation, or both.
+    // Word the framing to match what is present — never assert a rate that is
+    // absent from the data block, or the model may invent the missing one.
+    const hasBothReferences = geoComparisonCount > 1
+    const referenceText = hasBothReferences
+      ? 'its state and national averages'
+      : 'the reference average shown'
+    const comparisonRequest = hasBothReferences
+      ? 'against its state and the national average'
+      : 'against the reference average shown'
+    return `This is a choropleth map of ${topic} in ${location}. Only the overall ("All") rate is available for this place, so it is shown alongside ${referenceText} for context.${dataBlock}\n\nWrite a single sentence at an 8th grade reading level that places ${location} in context ${comparisonRequest} — say whether its rate is higher or lower and by roughly how much, and what that means for the people who live there. Focus on the "so what", not the chart mechanics.`
   }
 
   if (MAP_CHART_IDS.includes(hashId)) {
@@ -302,15 +314,17 @@ export async function generateCardInsight(
     context?.selectedGroups,
   )
 
-  // Single-region map with only one local value: append the parent state and
-  // national reference rates so the model has something to compare against.
-  const useGeoContextFraming =
-    MAP_CHART_IDS.includes(hashId) &&
-    entryCount === 1 &&
-    Boolean(context?.geoComparison?.length)
+  // Single-region map with only one local value: append whichever parent state
+  // and/or national reference rates resolved so the model has something to
+  // compare against. The count is threaded into the prompt so its framing only
+  // claims the reference rates that are actually present.
+  const geoComparisonRows =
+    MAP_CHART_IDS.includes(hashId) && entryCount === 1
+      ? (context?.geoComparison ?? [])
+      : []
 
-  const finalDataSection = useGeoContextFraming
-    ? [dataSection, formatGeoComparisonRows(context!.geoComparison!)]
+  const finalDataSection = geoComparisonRows.length
+    ? [dataSection, formatGeoComparisonRows(geoComparisonRows)]
         .filter(Boolean)
         .join('\n')
     : dataSection
@@ -322,7 +336,7 @@ export async function generateCardInsight(
     demographic,
     finalDataSection,
     context?.activeDemographicGroup,
-    useGeoContextFraming,
+    geoComparisonRows.length,
   )
 
   const params = new URLSearchParams(window.location.search)
