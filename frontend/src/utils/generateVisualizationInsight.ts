@@ -183,6 +183,10 @@ interface InsightData {
   dataSection: string
   // Number of comparison entries (groups or regions) the model would receive.
   entryCount: number
+  // For a single-region map, the demographic group of the lone surviving row
+  // (null otherwise). Lets the parent-geography fallback require an overall
+  // "All" rate, so it never frames a lone subgroup rate as the place's overall.
+  soleMapGroup: DemographicGroup | null
 }
 
 // One reference rate (e.g. the parent state or the national average) shown
@@ -246,6 +250,7 @@ export function prepareInsightData(
   selectedGroups?: DemographicGroup[],
 ): InsightData {
   let dataSection = ''
+  let soleMapGroup: DemographicGroup | null = null
   if (queryResponses?.[0]) {
     const metricConfig = getPrimaryMetricConfig(hashId, dataTypeConfig.metrics)
     if (metricConfig) {
@@ -257,12 +262,30 @@ export function prepareInsightData(
         metricConfig,
         selectedGroups,
       )
+      if (MAP_CHART_IDS.includes(hashId)) {
+        // Mirror the map-row predicate formatDataRows uses (a place label plus a
+        // non-null metric, optionally restricted to focused groups) so the
+        // sole-survivor check matches exactly what the model is shown.
+        const groupFilter =
+          selectedGroups && selectedGroups.length > 0
+            ? new Set<string>(selectedGroups.map(String))
+            : null
+        const mapRows = rows.filter(
+          (row) =>
+            row.fips_name != null &&
+            row[metricConfig.metricId] != null &&
+            (!groupFilter || groupFilter.has(String(row[demographicType]))),
+        )
+        if (mapRows.length === 1) {
+          soleMapGroup = mapRows[0][demographicType] as DemographicGroup
+        }
+      }
     }
   }
   const entryCount = dataSection
     ? dataSection.split('\n').filter(Boolean).length
     : 0
-  return { dataSection, entryCount }
+  return { dataSection, entryCount, soleMapGroup }
 }
 
 // How much comparison an insight has to work with:
@@ -281,7 +304,7 @@ export function getInsightDataStatus(
   queryResponses?: MetricQueryResponse[],
   selectedGroups?: DemographicGroup[],
 ): InsightDataStatus {
-  const { entryCount } = prepareInsightData(
+  const { entryCount, soleMapGroup } = prepareInsightData(
     hashId,
     dataTypeConfig,
     demographicType,
@@ -289,7 +312,15 @@ export function getInsightDataStatus(
     selectedGroups,
   )
   if (entryCount >= 2) return 'multi'
-  if (entryCount === 1 && MAP_CHART_IDS.includes(hashId)) return 'single-region'
+  // Only fall back for a lone *overall* rate. A lone subgroup row (e.g. every
+  // group but "White (NH)" is suppressed) has nothing honest to say against
+  // "All" state/national references, so it stays hidden.
+  if (
+    entryCount === 1 &&
+    MAP_CHART_IDS.includes(hashId) &&
+    soleMapGroup === ALL
+  )
+    return 'single-region'
   return 'empty'
 }
 
@@ -306,7 +337,7 @@ export async function generateCardInsight(
   const location = fips?.getSentenceDisplayName() ?? 'the United States'
   const demographic = DEMOGRAPHIC_DISPLAY_TYPES_LOWER_CASE[demographicType]
 
-  const { dataSection, entryCount } = prepareInsightData(
+  const { dataSection, entryCount, soleMapGroup } = prepareInsightData(
     hashId,
     dataTypeConfig,
     demographicType,
@@ -314,12 +345,13 @@ export async function generateCardInsight(
     context?.selectedGroups,
   )
 
-  // Single-region map with only one local value: append whichever parent state
-  // and/or national reference rates resolved so the model has something to
-  // compare against. The count is threaded into the prompt so its framing only
-  // claims the reference rates that are actually present.
+  // Single-region map whose lone local value is the overall "All" rate: append
+  // whichever parent state and/or national reference rates resolved so the model
+  // has something to compare against. Requiring "All" keeps the prompt's "only
+  // the overall rate is available" framing truthful. The count is threaded into
+  // the prompt so it only claims the reference rates actually present.
   const geoComparisonRows =
-    MAP_CHART_IDS.includes(hashId) && entryCount === 1
+    MAP_CHART_IDS.includes(hashId) && entryCount === 1 && soleMapGroup === ALL
       ? (context?.geoComparison ?? [])
       : []
 

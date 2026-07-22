@@ -172,6 +172,21 @@ describe('getInsightDataStatus', () => {
     ).toBe('single-region')
   })
 
+  test("a lone non-'All' map row is 'empty', not 'single-region'", () => {
+    // Only "All" got past suppression checks would be a valid fallback; a lone
+    // subgroup rate must not be framed as the place's overall rate.
+    const oneSubgroupRow = new MetricQueryResponse([
+      {
+        fips_name: 'Bartow County',
+        race_and_ethnicity: 'White (NH)',
+        rate: 13,
+      },
+    ])
+    expect(
+      getInsightDataStatus('rate-map', dataTypeConfig, DEMO, [oneSubgroupRow]),
+    ).toBe('empty')
+  })
+
   test("a single value on a non-map chart is 'empty', not 'single-region'", () => {
     // The parent-geography fallback only makes sense for maps, so a lone
     // value elsewhere stays hidden.
