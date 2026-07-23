@@ -6,7 +6,10 @@ import {
   DEMOGRAPHIC_DISPLAY_TYPES_LOWER_CASE,
   type DemographicType,
 } from '../data/query/Breakdowns'
-import type { MetricQueryResponse } from '../data/query/MetricQuery'
+import type {
+  MetricQuery,
+  MetricQueryResponse,
+} from '../data/query/MetricQuery'
 import { ALL, type DemographicGroup } from '../data/utils/Constants'
 import type { HetRow } from '../data/utils/DatasetTypes'
 import type { Fips } from '../data/utils/Fips'
@@ -129,27 +132,14 @@ export function buildPrompt(
   demographicLabel: string,
   dataSection: string,
   activeDemographicGroup?: DemographicGroup,
-  // How many parent-geography reference rates (state and/or national) are in
-  // dataSection. When > 0 the map has only one local value, so reframe from
-  // "describe the disparity" to "place this place in context". The count drives
-  // the wording so the prompt only claims the reference rates actually present.
-  geoComparisonCount = 0,
+  // When true, dataSection ranks the region against its same-level peers, so
+  // reframe from "describe the disparity" to "place this region among its peers".
+  hasPeerComparison = false,
 ): string {
   const dataBlock = dataSection ? `\n\nData:\n${dataSection}` : ''
 
-  if (MAP_CHART_IDS.includes(hashId) && geoComparisonCount > 0) {
-    // getInsightGeoComparison adds a reference row only when that geography's
-    // rate resolves, so the data block may hold the state, the nation, or both.
-    // Word the framing to match what is present — never assert a rate that is
-    // absent from the data block, or the model may invent the missing one.
-    const hasBothReferences = geoComparisonCount > 1
-    const referenceText = hasBothReferences
-      ? 'its state and national averages'
-      : 'the reference average shown'
-    const comparisonRequest = hasBothReferences
-      ? 'against its state and the national average'
-      : 'against the reference average shown'
-    return `This is a choropleth map of ${topic} in ${location}. Only the overall ("All") rate is available for this place, so it is shown alongside ${referenceText} for context.${dataBlock}\n\nWrite a single sentence at an 8th grade reading level that places ${location} in context ${comparisonRequest} — say whether its rate is higher or lower and by roughly how much, and what that means for the people who live there. Focus on the "so what", not the chart mechanics.`
+  if (MAP_CHART_IDS.includes(hashId) && hasPeerComparison) {
+    return `This is a choropleth map of ${topic} in ${location}. Because only its overall rate is available locally, ${location} is ranked against its peer places at the same geographic level — which draw on the same data source and methodology, so the comparison is fair.${dataBlock}\n\nWrite a single sentence at an 8th grade reading level that says where ${location} falls among its peers (for example, higher than most, near the middle, or among the lowest), using the specific numbers, and what that means for the people who live there. Focus on the "so what", not the chart mechanics.`
   }
 
   if (MAP_CHART_IDS.includes(hashId)) {
@@ -183,19 +173,92 @@ interface InsightData {
   dataSection: string
   // Number of comparison entries (groups or regions) the model would receive.
   entryCount: number
-  // For a single-region map, the demographic group of the lone surviving row
-  // (null otherwise). Lets the parent-geography fallback require an overall
-  // "All" rate, so it never frames a lone subgroup rate as the place's overall.
-  soleMapGroup: DemographicGroup | null
 }
 
-// One reference rate (e.g. the parent state or the national average) shown
-// alongside a single-region map so the model has something to compare against.
-export interface GeoComparisonRow {
-  // Human-readable label, e.g. "Georgia (All)" or "United States (All)".
-  label: string
-  value: number
+// The selected region's own overall ("All") rate plus the overall rates of its
+// same-level peers — e.g. a county against the other counties in its state, or
+// a state against the other states. Peers share the region's data source, file,
+// and methodology, so the comparison is apples-to-apples in a way that
+// county-vs-state-vs-national (different files, time windows, aggregations) is
+// not. Assembled by MapCard from a lazily-fetched peer query.
+export interface PeerComparison {
+  regionLabel: string // e.g. "Bartow County"
+  regionValue: number
+  peerNoun: string // plural, e.g. "Georgia counties" or "states"
+  // Overall rates of reporting peers, with the selected region excluded.
+  peerValues: number[]
   shortLabel: string
+}
+
+// Ranking of the region among its reporting peers, ready to render for the model.
+export interface PeerRankSummary {
+  regionLabel: string
+  regionValue: number
+  peerNoun: string
+  reportingCount: number
+  // Peers whose rate is strictly below the region's (i.e. the region exceeds them).
+  higherThanCount: number
+  median: number
+  min: number
+  max: number
+  shortLabel: string
+}
+
+// Below this many reporting peers a rank isn't meaningful, so the fallback hides
+// rather than rank against a near-empty field.
+export const MIN_REPORTING_PEERS = 3
+
+// Reduce raw peer rates to a rank summary, or null when too few peers report.
+// Ordinal (rank + median + range) by design: it never places the region's rate
+// beside a differently-computed reference figure, only beside same-level peers.
+export function summarizePeerComparison(
+  peer: PeerComparison,
+): PeerRankSummary | null {
+  const values = peer.peerValues.filter((v) => typeof v === 'number')
+  if (values.length < MIN_REPORTING_PEERS) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const median =
+    sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+  return {
+    regionLabel: peer.regionLabel,
+    regionValue: peer.regionValue,
+    peerNoun: peer.peerNoun,
+    reportingCount: values.length,
+    higherThanCount: values.filter((v) => v < peer.regionValue).length,
+    median: Math.round(median * 10) / 10,
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+    shortLabel: peer.shortLabel,
+  }
+}
+
+// Renders a peer rank summary as prompt bullet lines. Leads with the region's
+// own rate, then its standing among peers and the peer distribution.
+export function formatPeerComparison(summary: PeerRankSummary): string {
+  return [
+    `- ${summary.regionLabel}: ${summary.regionValue} ${summary.shortLabel}`,
+    `- Ranked against ${summary.reportingCount} ${summary.peerNoun} that report this measure: higher than ${summary.higherThanCount} of them`,
+    `- Peer median ${summary.median} ${summary.shortLabel}; range ${summary.min}–${summary.max} ${summary.shortLabel}`,
+  ].join('\n')
+}
+
+// Supplied by MapCard so a single-region insight can lazily fetch and rank the
+// region's same-level peers. Co-located here so MapCard and CardWrapper share it.
+export interface InsightPeerConfig {
+  // Same-level peer query (all counties in the state, or all states). Fetched
+  // lazily by the insight card only when opened on a single-region view, so
+  // multi-region maps never pay for it.
+  peerQuery: MetricQuery
+  // Plural noun for the peer set, e.g. "Georgia counties" or "states".
+  peerNoun: string
+  // The selected region's own overall ("All") rate, read from the region-self
+  // query response. Undefined when the region has no overall rate.
+  getRegionAllRate: (
+    queryResponses: MetricQueryResponse[],
+  ) => { label: string; value: number; shortLabel: string } | undefined
+  // Overall ("All") rates of the peer places, with the selected region excluded.
+  getPeerValues: (peerResponses: MetricQueryResponse[]) => number[]
 }
 
 // Optional context about which groups the user has focused the chart on.
@@ -206,18 +269,10 @@ export interface InsightContext {
   // The subset of groups the user has selected (e.g. via the trend legend).
   // Filters the rows the model sees so the insight matches what is on screen.
   selectedGroups?: DemographicGroup[]
-  // Parent-geography reference rates (state + national) supplied when a map
-  // shows a single region with only one usable value. Lets the insight place
-  // that lone rate in context instead of hiding. See getInsightDataStatus.
-  geoComparison?: GeoComparisonRow[]
-}
-
-// Renders parent-geography reference rates as prompt bullet lines, matching the
-// `- Label: value shortLabel` shape formatDataRows produces for the local row.
-export function formatGeoComparisonRows(rows: GeoComparisonRow[]): string {
-  return rows
-    .map((row) => `- ${row.label}: ${row.value} ${row.shortLabel}`)
-    .join('\n')
+  // Same-level peer rates supplied when a map shows a single region with only an
+  // overall rate. Lets the insight rank the region among its peers instead of
+  // hiding. See getInsightDataStatus / summarizePeerComparison.
+  peerComparison?: PeerComparison
 }
 
 // A stable suffix that changes when the user focuses the chart on a different
@@ -250,7 +305,6 @@ export function prepareInsightData(
   selectedGroups?: DemographicGroup[],
 ): InsightData {
   let dataSection = ''
-  let soleMapGroup: DemographicGroup | null = null
   if (queryResponses?.[0]) {
     const metricConfig = getPrimaryMetricConfig(hashId, dataTypeConfig.metrics)
     if (metricConfig) {
@@ -262,38 +316,21 @@ export function prepareInsightData(
         metricConfig,
         selectedGroups,
       )
-      if (MAP_CHART_IDS.includes(hashId)) {
-        // Mirror the map-row predicate formatDataRows uses (a place label plus a
-        // non-null metric, optionally restricted to focused groups) so the
-        // sole-survivor check matches exactly what the model is shown.
-        const groupFilter =
-          selectedGroups && selectedGroups.length > 0
-            ? new Set<string>(selectedGroups.map(String))
-            : null
-        const mapRows = rows.filter(
-          (row) =>
-            row.fips_name != null &&
-            row[metricConfig.metricId] != null &&
-            (!groupFilter || groupFilter.has(String(row[demographicType]))),
-        )
-        if (mapRows.length === 1) {
-          soleMapGroup = mapRows[0][demographicType] as DemographicGroup
-        }
-      }
     }
   }
   const entryCount = dataSection
     ? dataSection.split('\n').filter(Boolean).length
     : 0
-  return { dataSection, entryCount, soleMapGroup }
+  return { dataSection, entryCount }
 }
 
 // How much comparison an insight has to work with:
-// - 'multi'         — two or more values; describe the disparity directly.
-// - 'single-region' — exactly one value on a map (e.g. a county where every
-//                     other group is suppressed, leaving only "All"). Nothing
-//                     local to compare, but a parent-geography fallback can
-//                     still place it against its state and the nation.
+// - 'multi'         — two or more values on screen; describe the disparity directly.
+// - 'single-region' — a map with fewer than two on-screen values but a usable
+//                     overall ("All") rate for the selected region (a county
+//                     where every subgroup is suppressed, or a state with no
+//                     county-level data). Nothing local to compare, but the
+//                     region can be ranked against its same-level peers.
 // - 'empty'         — nothing usable (suppressed/missing); hide the insight.
 export type InsightDataStatus = 'multi' | 'single-region' | 'empty'
 
@@ -303,8 +340,12 @@ export function getInsightDataStatus(
   demographicType: DemographicType,
   queryResponses?: MetricQueryResponse[],
   selectedGroups?: DemographicGroup[],
+  // Whether the selected region has its own overall "All" rate (from the
+  // region-self query). Gates the peer fallback so a lone subgroup row — with no
+  // overall rate — stays hidden rather than being ranked as the region's overall.
+  regionHasAllRate = false,
 ): InsightDataStatus {
-  const { entryCount, soleMapGroup } = prepareInsightData(
+  const { entryCount } = prepareInsightData(
     hashId,
     dataTypeConfig,
     demographicType,
@@ -312,15 +353,7 @@ export function getInsightDataStatus(
     selectedGroups,
   )
   if (entryCount >= 2) return 'multi'
-  // Only fall back for a lone *overall* rate. A lone subgroup row (e.g. every
-  // group but "White (NH)" is suppressed) has nothing honest to say against
-  // "All" state/national references, so it stays hidden.
-  if (
-    entryCount === 1 &&
-    MAP_CHART_IDS.includes(hashId) &&
-    soleMapGroup === ALL
-  )
-    return 'single-region'
+  if (MAP_CHART_IDS.includes(hashId) && regionHasAllRate) return 'single-region'
   return 'empty'
 }
 
@@ -337,7 +370,7 @@ export async function generateCardInsight(
   const location = fips?.getSentenceDisplayName() ?? 'the United States'
   const demographic = DEMOGRAPHIC_DISPLAY_TYPES_LOWER_CASE[demographicType]
 
-  const { dataSection, entryCount, soleMapGroup } = prepareInsightData(
+  const { dataSection } = prepareInsightData(
     hashId,
     dataTypeConfig,
     demographicType,
@@ -345,20 +378,18 @@ export async function generateCardInsight(
     context?.selectedGroups,
   )
 
-  // Single-region map whose lone local value is the overall "All" rate: append
-  // whichever parent state and/or national reference rates resolved so the model
-  // has something to compare against. Requiring "All" keeps the prompt's "only
-  // the overall rate is available" framing truthful. The count is threaded into
-  // the prompt so it only claims the reference rates actually present.
-  const geoComparisonRows =
-    MAP_CHART_IDS.includes(hashId) && entryCount === 1 && soleMapGroup === ALL
-      ? (context?.geoComparison ?? [])
-      : []
+  // Single-region map: rank the region against its same-level peers instead of
+  // describing an on-screen disparity. summarizePeerComparison returns null when
+  // too few peers report, in which case we fall through to the standard framing.
+  const peerSummary =
+    MAP_CHART_IDS.includes(hashId) && context?.peerComparison
+      ? summarizePeerComparison(context.peerComparison)
+      : null
 
-  const finalDataSection = geoComparisonRows.length
-    ? [dataSection, formatGeoComparisonRows(geoComparisonRows)]
-        .filter(Boolean)
-        .join('\n')
+  // The peer summary already leads with the region's own rate, so it replaces
+  // the lone local row rather than appending to it.
+  const finalDataSection = peerSummary
+    ? formatPeerComparison(peerSummary)
     : dataSection
 
   const prompt = buildPrompt(
@@ -368,7 +399,7 @@ export async function generateCardInsight(
     demographic,
     finalDataSection,
     context?.activeDemographicGroup,
-    geoComparisonRows.length,
+    Boolean(peerSummary),
   )
 
   const params = new URLSearchParams(window.location.search)

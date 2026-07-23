@@ -14,7 +14,7 @@ import { getGeographiesDatasetId } from '../data/utils/datasetutils'
 import type { Fips } from '../data/utils/Fips'
 import { useCompareMode } from '../reports/CompareModeContext'
 import { reportProviderSteps } from '../reports/ReportProviderSteps'
-import type { GeoComparisonRow } from '../utils/generateVisualizationInsight'
+import type { InsightPeerConfig } from '../utils/generateVisualizationInsight'
 import { getInsightDataStatus } from '../utils/generateVisualizationInsight'
 import type { ScrollableHashId } from '../utils/hooks/useStepObserver'
 import { cardQueryResponsesAtom } from '../utils/sharedSettingsState'
@@ -73,12 +73,9 @@ function CardWrapper(props: {
   // The subset of groups the user has focused a trend chart on (via the legend).
   // Filters the insight data so it describes only the visible lines.
   selectedGroups?: DemographicGroup[]
-  // Given this card's query responses, returns parent-geography reference rates
-  // (state + national) for a single-region map, or undefined when none apply.
-  // Only MapCard supplies this; it lets a single-value map still show an insight.
-  getInsightGeoComparison?: (
-    queryResponses: MetricQueryResponse[],
-  ) => GeoComparisonRow[] | undefined
+  // Supplied only by MapCard: lets a single-region map rank the region against
+  // its same-level peers (fetched lazily by the insight card) instead of hiding.
+  insightPeerConfig?: InsightPeerConfig
 }) {
   const loadingComponent = (
     <div
@@ -143,9 +140,13 @@ function CardWrapper(props: {
         )
 
         // Decide whether to offer a per-card insight. 'multi' (two or more
-        // values) shows directly. A single-region map normally has nothing to
-        // compare, but if parent-geography reference rates are available we show
-        // it and let the insight place the lone value against state and nation.
+        // on-screen values) shows directly. A single-region map has nothing local
+        // to compare, but when the region has its own overall rate we show it and
+        // let the insight rank it against its same-level peers (fetched lazily).
+        const regionRate =
+          insightProps != null && !inCompareMode
+            ? props.insightPeerConfig?.getRegionAllRate(queryResponses)
+            : undefined
         const dataStatus =
           insightProps != null && !inCompareMode
             ? getInsightDataStatus(
@@ -154,15 +155,14 @@ function CardWrapper(props: {
                 insightProps.demographicType,
                 queryResponses,
                 insightProps.selectedGroups,
+                Boolean(regionRate),
               )
             : 'empty'
-        const geoComparison =
-          dataStatus === 'single-region'
-            ? props.getInsightGeoComparison?.(queryResponses)
-            : undefined
         const showInsight =
           dataStatus === 'multi' ||
-          (dataStatus === 'single-region' && Boolean(geoComparison?.length))
+          (dataStatus === 'single-region' &&
+            Boolean(props.insightPeerConfig) &&
+            Boolean(regionRate))
 
         // In compare mode, show the sparkle only for sections that have a ContrastInsightSection.
         const showContrastInsightButton =
@@ -202,7 +202,9 @@ function CardWrapper(props: {
                 <InsightVisualizationCard
                   scrollToHash={props.scrollToHash}
                   queryResponses={queryResponses}
-                  geoComparison={geoComparison}
+                  dataStatus={dataStatus}
+                  peerConfig={props.insightPeerConfig}
+                  regionRate={regionRate}
                   {...insightProps}
                 />
               )}

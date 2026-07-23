@@ -4,13 +4,19 @@ import { useCallback, useEffect, useState } from 'react'
 import type { DataTypeConfig } from '../../data/config/MetricConfigTypes'
 import type { DemographicType } from '../../data/query/Breakdowns'
 import type { MetricQueryResponse } from '../../data/query/MetricQuery'
+import { useMetrics } from '../../data/react/useResources'
 import type { DemographicGroup } from '../../data/utils/Constants'
 import type { Fips } from '../../data/utils/Fips'
 import { SHOW_INSIGHT_GENERATION } from '../../featureFlags'
-import type { GeoComparisonRow } from '../../utils/generateVisualizationInsight'
+import type {
+  InsightDataStatus,
+  InsightPeerConfig,
+  PeerComparison,
+} from '../../utils/generateVisualizationInsight'
 import {
   buildInsightFocusSuffix,
   generateCardInsight,
+  summarizePeerComparison,
 } from '../../utils/generateVisualizationInsight'
 import type { ScrollableHashId } from '../../utils/hooks/useStepObserver'
 import {
@@ -28,9 +34,13 @@ interface InsightVisualizationCardProps {
   isCompareCard?: boolean
   activeDemographicGroup?: DemographicGroup
   selectedGroups?: DemographicGroup[]
-  // Parent-geography reference rates for a single-region map fallback (see
-  // CardWrapper). Passed through to the insight prompt as comparison context.
-  geoComparison?: GeoComparisonRow[]
+  // How much comparison this insight has to work with (see getInsightDataStatus).
+  dataStatus: InsightDataStatus
+  // Supplied for single-region maps: lets this card lazily fetch the region's
+  // same-level peers and rank against them instead of hiding.
+  peerConfig?: InsightPeerConfig
+  // The selected region's own overall rate, resolved by CardWrapper.
+  regionRate?: { label: string; value: number; shortLabel: string }
 }
 
 export default function InsightVisualizationCard({
@@ -42,7 +52,9 @@ export default function InsightVisualizationCard({
   isCompareCard,
   activeDemographicGroup,
   selectedGroups,
-  geoComparison,
+  dataStatus,
+  peerConfig,
+  regionRate,
 }: InsightVisualizationCardProps) {
   const [cardInsights, setCardInsights] = useAtom(cardInsightsAtom)
   const openKey = `${scrollToHash}${isCompareCard ? '-2' : ''}`
@@ -51,6 +63,38 @@ export default function InsightVisualizationCard({
   const [error, setError] = useState<string | null>(null)
   // The exact server cache key used, captured so the flag button targets this insight.
   const [serverCacheKey, setServerCacheKey] = useState<string | null>(null)
+
+  // Single-region maps rank the region against its same-level peers. The peer
+  // file is fetched here, lazily, and only once the insight is actually opened —
+  // so multi-region maps and unopened insights never trigger the extra load.
+  const peerMode =
+    dataStatus === 'single-region' && Boolean(peerConfig) && Boolean(regionRate)
+  const peerResponses = useMetrics(
+    peerMode && isOpen && peerConfig ? [peerConfig.peerQuery] : [],
+  )
+  const peersReady = Array.isArray(peerResponses)
+  const peersLoading = peerMode && isOpen && peerResponses === 'loading'
+  const peersErrored = peerMode && isOpen && peerResponses === 'error'
+  const peerComparison: PeerComparison | undefined =
+    peerMode &&
+    peerConfig &&
+    regionRate &&
+    peersReady &&
+    peerResponses.length > 0
+      ? {
+          regionLabel: regionRate.label,
+          regionValue: regionRate.value,
+          peerNoun: peerConfig.peerNoun,
+          peerValues: peerConfig.getPeerValues(peerResponses),
+          shortLabel: regionRate.shortLabel,
+        }
+      : undefined
+  // Peers loaded, but too few report the measure to rank against honestly.
+  const peerInsufficient =
+    peerMode &&
+    peersReady &&
+    peerResponses.length > 0 &&
+    (!peerComparison || summarizePeerComparison(peerComparison) === null)
 
   // A stable suffix so the insight regenerates when the user changes which
   // group(s) the chart is focused on (highlighted map group / selected trend
@@ -74,7 +118,7 @@ export default function InsightVisualizationCard({
         fips,
         queryResponses,
         isCompareCard,
-        { activeDemographicGroup, selectedGroups, geoComparison },
+        { activeDemographicGroup, selectedGroups, peerComparison },
       )
       setServerCacheKey(result.cacheKey ?? null)
       if (result.rateLimited) {
@@ -98,7 +142,7 @@ export default function InsightVisualizationCard({
     setCardInsights,
     activeDemographicGroup,
     selectedGroups,
-    geoComparison,
+    peerComparison,
   ])
 
   const handleFlagged = () => {
@@ -121,11 +165,23 @@ export default function InsightVisualizationCard({
 
   // `error` is in the guard so a failed call doesn't get auto-retried on the
   // next render — the user must click Try again. Clearing the insight (e.g. after
-  // flagging) re-fires this effect and regenerates.
+  // flagging) re-fires this effect and regenerates. In peer mode we also wait for
+  // the peer fetch to resolve and skip generation when too few peers report.
   useEffect(() => {
     if (!isOpen || insight || error || isGenerating) return
+    if (peerMode && (!peersReady || peerInsufficient)) return
     void handleGenerate()
-  }, [isOpen, insight, error, isGenerating, cacheKey, handleGenerate])
+  }, [
+    isOpen,
+    insight,
+    error,
+    isGenerating,
+    cacheKey,
+    handleGenerate,
+    peerMode,
+    peersReady,
+    peerInsufficient,
+  ])
 
   if (!SHOW_INSIGHT_GENERATION || !isOpen) return null
 
@@ -134,13 +190,22 @@ export default function InsightVisualizationCard({
       role='status'
       className='mb-3 animate-expand-down rounded-md bg-footer-color p-3'
     >
-      {isGenerating ? (
+      {isGenerating || peersLoading ? (
         <div className='flex items-center gap-2 py-1'>
           <CircularProgress size={14} className='shrink-0' />
           <p className='m-0 text-alt-dark text-small'>
             Analyzing health equity data with AI...
           </p>
         </div>
+      ) : peersErrored ? (
+        <p className='m-0 text-red-orange text-small'>
+          Unable to load comparison data. Please try again later.
+        </p>
+      ) : peerInsufficient ? (
+        <p className='m-0 text-alt-dark text-small'>
+          Not enough comparable places report this measure to generate an
+          insight.
+        </p>
       ) : error ? (
         <div className='flex flex-col gap-1'>
           <p className='m-0 text-red-orange text-small'>{error}</p>
@@ -148,7 +213,7 @@ export default function InsightVisualizationCard({
             Try again
           </Button>
         </div>
-      ) : (
+      ) : insight ? (
         <>
           <p className='m-0 font-bold text-alt-dark leading-snug'>{insight}</p>
           <p className='m-0 mt-2 text-alt-dark text-smallest'>
@@ -161,7 +226,7 @@ export default function InsightVisualizationCard({
             />
           </p>
         </>
-      )}
+      ) : null}
     </div>
   )
 }
