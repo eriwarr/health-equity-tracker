@@ -295,18 +295,10 @@ func reserveDayAndMinute(
 	return dayCount, minuteCount, refusedBy, err
 }
 
-// releaseGeneration returns a slot that reserveGeneration claimed but that
-// produced nothing, which today means only a provider rate-limit rejection.
-// Reservation stays before the provider call so a crash cannot lose a slot;
-// this is the compensating step for the one failure that is both certain and
-// certainly produced no output.
-//
-// Best effort by design: the request has already failed, and a bookkeeping
-// error must not turn a refused generation into a failed response. Counts floor
-// at zero rather than going negative if a release is somehow applied twice.
 // releaseDayAndMinute gives back the claims reserveDayAndMinute persisted. Used
 // on its own when the monthly ceiling refuses, since that path never reached the
-// monthly counter.
+// monthly counter. Counts floor at zero rather than going negative, so a release
+// somehow applied twice cannot drive a ledger below empty.
 func releaseDayAndMinute(ctx context.Context, bucket string, snap usageSnapshot) error {
 	_, err := mutateLedger(ctx, bucket, ledgerObject(snap.day), func(l *usageLedger) bool {
 		if l.Generations > 0 {
@@ -322,10 +314,15 @@ func releaseDayAndMinute(ctx context.Context, bucket string, snap usageSnapshot)
 	return err
 }
 
-// releaseGeneration returns all three claims. The error is reported rather than
-// only logged: a caller that marks a request unreserved while the ledger still
-// holds the reservation would put the request log and the ledger's own counters
-// into exactly the disagreement releasing exists to avoid.
+// releaseGeneration returns all three claims, for a provider rate-limit
+// rejection: the one provider failure that certainly produced nothing.
+// Reservation stays before the provider call so a crash cannot lose a slot, and
+// this is the compensating step for it.
+//
+// The error is reported rather than only logged: a caller that marks a request
+// unreserved while the ledger still holds the reservation would put the request
+// log and the ledger's own counters into exactly the disagreement releasing
+// exists to avoid.
 func releaseGeneration(ctx context.Context, bucket string, snap usageSnapshot) error {
 	dayErr := releaseDayAndMinute(ctx, bucket, snap)
 	if dayErr != nil {
@@ -443,6 +440,20 @@ var (
 // servingDisabled reports the serving kill switch, memoized so the common
 // path costs at most one object check per minute per instance. The Attrs call
 // is made outside the lock to avoid blocking concurrent requests on slow GCS reads.
+// The lock is dropped around the GCS call where generationDisabled holds it
+// through, and the difference is deliberate rather than drift.
+//
+// This runs on every insight request, cache hits included, so holding the lock
+// would put one GCS round trip per TTL on the hot path for every concurrent
+// caller. A cold-cache herd of Attrs calls is the cheaper trade. It also fails
+// open, so a caller that races past the memo reads "serving enabled", which is
+// the answer it would almost certainly have got by waiting.
+//
+// generationDisabled runs only once the cache has missed and a provider call is
+// already committed, where serializing costs little against the generation
+// itself. It also fails closed, so a caller that did not wait would read
+// "disabled" and refuse a generation that should have proceeded. Holding the
+// lock there is correctness, not just tolerance.
 func servingDisabled(ctx context.Context, bucket string) bool {
 	servingKillSwitchMu.Lock()
 	if !servingKillSwitchChecked.IsZero() && time.Since(servingKillSwitchChecked) < killSwitchTTL {
