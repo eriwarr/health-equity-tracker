@@ -232,9 +232,15 @@ func resolveInsight(w http.ResponseWriter, r *http.Request, ev *insightEvent, pr
 		// rather than being spent on learning the provider was full. Detached
 		// from the request context for the same reason recordTokenUsage is.
 		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		releaseGeneration(releaseCtx, cacheBucket, usage)
+		releaseErr := releaseGeneration(releaseCtx, cacheBucket, usage)
 		releaseCancel()
-		ev.Reserved = false
+		// Only report the slot as returned if it actually was. Clearing this
+		// while the ledger still holds the reservation would put the request log
+		// and the ledger's counters into the disagreement releasing exists to
+		// avoid, and the log is what the volume query trusts.
+		if releaseErr == nil {
+			ev.Reserved = false
+		}
 
 		ev.Outcome, ev.Reason = outcomeError, reasonProviderQuota
 		log.Print("[insight] provider quota reached")

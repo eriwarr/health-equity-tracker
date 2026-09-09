@@ -1369,3 +1369,64 @@ func TestReleaseGenerationSkipsARolledWindow(t *testing.T) {
 		t.Errorf("minuteCount = %d, want 1 — a rolled window must not be credited", day.MinuteCount)
 	}
 }
+
+// A spent month must not keep charging the day. The daily and per-minute claims
+// land before the monthly counter is consulted, so without compensation every
+// refused request after the month is exhausted would add another to both,
+// inflating the daily count and filling the minute window with generations that
+// never happened.
+func TestMonthlyRefusalGivesBackTheDayAndMinute(t *testing.T) {
+	store := newFakeLedgerStore()
+	useFakeLedger(t, store)
+	t.Setenv("INSIGHT_MAX_GENERATIONS_PER_MINUTE", "100")
+	t.Setenv("INSIGHT_MAX_GENERATIONS_PER_DAY", "100")
+	t.Setenv("INSIGHT_MAX_GENERATIONS_PER_MONTH", "1")
+
+	if ok, _, err := reserveGeneration(context.Background(), "b"); err != nil || !ok {
+		t.Fatalf("first reservation: ok=%v err=%v", ok, err)
+	}
+
+	// Every one of these is refused by the month.
+	for i := range 5 {
+		ok, snap, err := reserveGeneration(context.Background(), "b")
+		if err != nil {
+			t.Fatalf("refusal %d: unexpected error %v", i+1, err)
+		}
+		if ok {
+			t.Fatalf("refusal %d was permitted past the monthly ceiling", i+1)
+		}
+		if snap.refusedBy != "month" {
+			t.Errorf("refusedBy = %q, want month", snap.refusedBy)
+		}
+	}
+
+	day, _, _ := ledgerPeriods(time.Now())
+	led := store.ledger(t, ledgerObject(day))
+	if led.Generations != 1 {
+		t.Errorf("daily generations = %d, want 1 — refused requests must not accumulate", led.Generations)
+	}
+	if led.MinuteCount != 1 {
+		t.Errorf("minuteCount = %d, want 1 — a spent month must not fill the minute window", led.MinuteCount)
+	}
+}
+
+// The whole point of releasing is that the log and the ledger agree. A release
+// that failed and was reported as succeeding would break exactly that.
+func TestReleaseGenerationReportsFailure(t *testing.T) {
+	store := newFakeLedgerStore()
+	useFakeLedger(t, store)
+
+	ok, snap, err := reserveGeneration(context.Background(), "b")
+	if err != nil || !ok {
+		t.Fatalf("reservation: ok=%v err=%v", ok, err)
+	}
+
+	// Outlast every compare-and-swap retry so the release cannot land.
+	store.mu.Lock()
+	store.failWrites = 100
+	store.mu.Unlock()
+
+	if err := releaseGeneration(context.Background(), "b", snap); err == nil {
+		t.Error("release reported success while every write was failing")
+	}
+}

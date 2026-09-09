@@ -368,12 +368,22 @@ headroom under the provider's 15 absorbs it. And a ledger written before this fi
 existed arrives with an empty `minute`, which reads as a window that has not started yet.
 
 **Releasing a slot.** Reservation stays before the provider call so a crash cannot lose a
-slot. `releaseGeneration` is the compensating step for the one failure that certainly
-produced nothing — a provider rate-limit rejection — and it is the only path that returns
-a slot. The request log follows the ledger there: `reserved` is `false` on that line, so
-the reservation query and the ledger's own counters still agree. The release credits the
-window the slot was taken from, not whichever window is current, because a generation can
-outlast the minute it started in.
+slot, and two paths give one back.
+
+A provider rate-limit rejection is the one failure that certainly produced nothing, so
+`releaseGeneration` returns all three claims. The request log follows the ledger there:
+`reserved` is `false` on that line only when the release actually landed, because a line
+claiming otherwise while the ledger still held the reservation would create exactly the
+disagreement releasing exists to prevent. That is why the release reports its error rather
+than only logging it.
+
+A monthly refusal arrives after the daily and per-minute claims are already written, so
+`releaseDayAndMinute` returns those two. Without it they would not stay one high: once the
+month is spent, every refused request after it adds another, inflating the daily count and
+filling the minute window with generations that never happened.
+
+Both credit the window the slot was taken from rather than whichever is current, because a
+generation can outlast the minute it started in.
 
 ### Guarding the write endpoints
 

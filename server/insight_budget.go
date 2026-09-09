@@ -304,26 +304,43 @@ func reserveDayAndMinute(
 // Best effort by design: the request has already failed, and a bookkeeping
 // error must not turn a refused generation into a failed response. Counts floor
 // at zero rather than going negative if a release is somehow applied twice.
-func releaseGeneration(ctx context.Context, bucket string, snap usageSnapshot) {
-	release := func(alsoMinute bool) func(*usageLedger) bool {
-		return func(l *usageLedger) bool {
-			if l.Generations > 0 {
-				l.Generations--
-			}
-			// Only credit the window the slot was taken from. A provider call can
-			// outlast the minute it started in, and the window may have rolled.
-			if alsoMinute && l.Minute == snap.minute && l.MinuteCount > 0 {
-				l.MinuteCount--
-			}
-			return true
+// releaseDayAndMinute gives back the claims reserveDayAndMinute persisted. Used
+// on its own when the monthly ceiling refuses, since that path never reached the
+// monthly counter.
+func releaseDayAndMinute(ctx context.Context, bucket string, snap usageSnapshot) error {
+	_, err := mutateLedger(ctx, bucket, ledgerObject(snap.day), func(l *usageLedger) bool {
+		if l.Generations > 0 {
+			l.Generations--
 		}
+		// Only credit the window the slot was taken from. A provider call can
+		// outlast the minute it started in, and the window may have rolled.
+		if l.Minute == snap.minute && l.MinuteCount > 0 {
+			l.MinuteCount--
+		}
+		return true
+	})
+	return err
+}
+
+// releaseGeneration returns all three claims. The error is reported rather than
+// only logged: a caller that marks a request unreserved while the ledger still
+// holds the reservation would put the request log and the ledger's own counters
+// into exactly the disagreement releasing exists to avoid.
+func releaseGeneration(ctx context.Context, bucket string, snap usageSnapshot) error {
+	dayErr := releaseDayAndMinute(ctx, bucket, snap)
+	if dayErr != nil {
+		log.Printf("[insight] could not release daily reservation: %v", dayErr)
 	}
-	if _, err := mutateLedger(ctx, bucket, ledgerObject(snap.day), release(true)); err != nil {
-		log.Printf("[insight] could not release daily reservation: %v", err)
+	_, monthErr := mutateLedger(ctx, bucket, ledgerObject(snap.month), func(l *usageLedger) bool {
+		if l.Generations > 0 {
+			l.Generations--
+		}
+		return true
+	})
+	if monthErr != nil {
+		log.Printf("[insight] could not release monthly reservation: %v", monthErr)
 	}
-	if _, err := mutateLedger(ctx, bucket, ledgerObject(snap.month), release(false)); err != nil {
-		log.Printf("[insight] could not release monthly reservation: %v", err)
-	}
+	return errors.Join(dayErr, monthErr)
 }
 
 // reserveGeneration claims one generation against the per-minute, daily and
@@ -343,18 +360,22 @@ func reserveGeneration(ctx context.Context, bucket string) (bool, usageSnapshot,
 	}
 	logCeilingApproach("daily", snap.dayCount, snap.dayLimit)
 
-	// A monthly rejection lands after the daily and per-minute counts have
-	// already been claimed, and neither is released: erring toward generating
-	// less is the safe direction to be wrong in. The daily count stays one high
-	// for the rest of the day; the minute window corrects itself when it rolls.
-	// Only a provider rate-limit rejection releases, because it is the one
-	// failure that certainly produced nothing.
+	// A monthly refusal lands after the daily and per-minute counts are already
+	// claimed, so they are given back below. Left in place they would not stay
+	// one high: once the month is spent, every refused request after it would
+	// add another, inflating the daily count and filling the minute window with
+	// generations that never happened.
 	snap.monthLimit = envInt("INSIGHT_MAX_GENERATIONS_PER_MONTH", defaultMaxGenerationsPerMonth)
 	monthCount, ok, err := reserveOne(ctx, bucket, ledgerObject(month), snap.monthLimit)
 	snap.monthCount = monthCount
 	if err != nil || !ok {
 		if !ok {
 			snap.refusedBy = "month"
+		}
+		// The monthly counter was not written on either path, so the day and
+		// minute hold claims against a generation that will not happen.
+		if relErr := releaseDayAndMinute(ctx, bucket, snap); relErr != nil {
+			log.Printf("[insight] could not release after a monthly refusal: %v", relErr)
 		}
 		return false, snap, err
 	}
