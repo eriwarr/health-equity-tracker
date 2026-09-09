@@ -343,9 +343,12 @@ func reserveGeneration(ctx context.Context, bucket string) (bool, usageSnapshot,
 	}
 	logCeilingApproach("daily", snap.dayCount, snap.dayLimit)
 
-	// A monthly rejection after the daily increment leaves the daily count one
-	// high for the rest of the day. That errs toward generating less, which is
-	// the safe direction to be wrong in.
+	// A monthly rejection lands after the daily and per-minute counts have
+	// already been claimed, and neither is released: erring toward generating
+	// less is the safe direction to be wrong in. The daily count stays one high
+	// for the rest of the day; the minute window corrects itself when it rolls.
+	// Only a provider rate-limit rejection releases, because it is the one
+	// failure that certainly produced nothing.
 	snap.monthLimit = envInt("INSIGHT_MAX_GENERATIONS_PER_MONTH", defaultMaxGenerationsPerMonth)
 	monthCount, ok, err := reserveOne(ctx, bucket, ledgerObject(month), snap.monthLimit)
 	snap.monthCount = monthCount
