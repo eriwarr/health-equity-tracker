@@ -250,7 +250,7 @@ func TestRecordTokenUsageAttributesBothPeriods(t *testing.T) {
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 
-	day, month, _ := ledgerPeriods(time.Now())
+	day, month, _ := ledgerPeriods(nowFunc())
 	recordTokenUsage(context.Background(), "b", 300, 80)
 
 	for _, period := range []string{day, month} {
@@ -1165,7 +1165,7 @@ func TestCeilingWarnPercentIgnoresOutOfRangeValues(t *testing.T) {
 
 // dailyLedgerPeriod is the daily key production would write right now.
 func dailyLedgerPeriod() string {
-	day, _, _ := ledgerPeriods(time.Now())
+	day, _, _ := ledgerPeriods(nowFunc())
 	return day
 }
 
@@ -1230,11 +1230,23 @@ func TestLedgerPeriodsUseProviderQuotaCalendar(t *testing.T) {
 
 // --- per-minute guard and reservation release (#5168) ---
 
+// freezeClock pins the ledger's view of time. Ledger keys are derived from the
+// wall clock, so any test asserting a per-minute count would otherwise fail
+// whenever it happened to straddle a minute boundary.
+func freezeClock(t *testing.T) {
+	t.Helper()
+	orig := nowFunc
+	at := time.Now()
+	nowFunc = func() time.Time { return at }
+	t.Cleanup(func() { nowFunc = orig })
+}
+
 // The per-minute guard is what stands between a launch burst and the provider's
 // 15-a-minute free-tier limit. It lives in the daily ledger object rather than a
 // per-process limiter because Cloud Run runs this service up to 50 instances, so
 // a per-instance share of 15 rounds to less than one request.
 func TestReserveGenerationShedsBurstBeforeSpendingTheDay(t *testing.T) {
+	freezeClock(t)
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 	t.Setenv("INSIGHT_MAX_GENERATIONS_PER_MINUTE", "3")
@@ -1266,7 +1278,7 @@ func TestReserveGenerationShedsBurstBeforeSpendingTheDay(t *testing.T) {
 	if snap.dayCount != 3 {
 		t.Errorf("dayCount = %d, want 3 — a shed burst must not spend the day", snap.dayCount)
 	}
-	day, _, _ := ledgerPeriods(time.Now())
+	day, _, _ := ledgerPeriods(nowFunc())
 	if led := store.ledger(t, ledgerObject(day)); led.Generations != 3 {
 		t.Errorf("ledger generations = %d, want 3", led.Generations)
 	}
@@ -1275,6 +1287,7 @@ func TestReserveGenerationShedsBurstBeforeSpendingTheDay(t *testing.T) {
 // A refusal must leave nothing behind, or a burst would still drain the day one
 // rejected request at a time.
 func TestReserveGenerationRefusalDoesNotWriteTheLedger(t *testing.T) {
+	freezeClock(t)
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 	t.Setenv("INSIGHT_MAX_GENERATIONS_PER_MINUTE", "1")
@@ -1282,7 +1295,7 @@ func TestReserveGenerationRefusalDoesNotWriteTheLedger(t *testing.T) {
 	if ok, _, err := reserveGeneration(context.Background(), "b"); err != nil || !ok {
 		t.Fatalf("first reservation: ok=%v err=%v", ok, err)
 	}
-	day, _, _ := ledgerPeriods(time.Now())
+	day, _, _ := ledgerPeriods(nowFunc())
 	before := store.ledger(t, ledgerObject(day))
 
 	if ok, _, _ := reserveGeneration(context.Background(), "b"); ok {
@@ -1330,6 +1343,7 @@ func TestReserveDayAndMinuteRollsTheWindow(t *testing.T) {
 // A provider rate-limit rejection is the one failure that certainly produced
 // nothing, so its slot goes back rather than being spent on the discovery.
 func TestReleaseGenerationReturnsTheSlot(t *testing.T) {
+	freezeClock(t)
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 
@@ -1351,6 +1365,7 @@ func TestReleaseGenerationReturnsTheSlot(t *testing.T) {
 // A generation can outlast the minute it started in. Crediting the window that
 // happens to be current would hand a slot back to a window that never spent one.
 func TestReleaseGenerationSkipsARolledWindow(t *testing.T) {
+	freezeClock(t)
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 
@@ -1376,6 +1391,7 @@ func TestReleaseGenerationSkipsARolledWindow(t *testing.T) {
 // inflating the daily count and filling the minute window with generations that
 // never happened.
 func TestMonthlyRefusalGivesBackTheDayAndMinute(t *testing.T) {
+	freezeClock(t)
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 	t.Setenv("INSIGHT_MAX_GENERATIONS_PER_MINUTE", "100")
@@ -1400,7 +1416,7 @@ func TestMonthlyRefusalGivesBackTheDayAndMinute(t *testing.T) {
 		}
 	}
 
-	day, _, _ := ledgerPeriods(time.Now())
+	day, _, _ := ledgerPeriods(nowFunc())
 	led := store.ledger(t, ledgerObject(day))
 	if led.Generations != 1 {
 		t.Errorf("daily generations = %d, want 1 — refused requests must not accumulate", led.Generations)
@@ -1413,6 +1429,7 @@ func TestMonthlyRefusalGivesBackTheDayAndMinute(t *testing.T) {
 // The whole point of releasing is that the log and the ledger agree. A release
 // that failed and was reported as succeeding would break exactly that.
 func TestReleaseGenerationReportsFailure(t *testing.T) {
+	freezeClock(t)
 	store := newFakeLedgerStore()
 	useFakeLedger(t, store)
 

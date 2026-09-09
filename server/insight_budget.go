@@ -135,6 +135,12 @@ func isPreconditionFailed(err error) bool {
 	return errors.As(err, &gerr) && gerr.Code == http.StatusPreconditionFailed
 }
 
+// nowFunc is a package-level var for the same reason ledgerLoad and ledgerSave
+// are: every ledger key is derived from wall-clock time, so a test spanning a
+// minute boundary would otherwise assert against a window that rolled underneath
+// it.
+var nowFunc = time.Now
+
 // ledgerLoad and ledgerSave are package-level vars so tests can substitute an
 // in-memory store, matching the gcsDownload pattern in handlers.go.
 var (
@@ -343,7 +349,7 @@ func releaseGeneration(ctx context.Context, bucket string, snap usageSnapshot) e
 // reserveGeneration claims one generation against the per-minute, daily and
 // monthly ceilings. It returns false when any is exhausted.
 func reserveGeneration(ctx context.Context, bucket string) (bool, usageSnapshot, error) {
-	day, month, minute := ledgerPeriods(time.Now())
+	day, month, minute := ledgerPeriods(nowFunc())
 	snap := usageSnapshot{day: day, month: month, minute: minute}
 
 	snap.dayLimit = envInt("INSIGHT_MAX_GENERATIONS_PER_DAY", defaultMaxGenerationsPerDay)
@@ -387,7 +393,7 @@ func recordTokenUsage(ctx context.Context, bucket string, promptTokens, outputTo
 	if promptTokens == 0 && outputTokens == 0 {
 		return
 	}
-	day, month, _ := ledgerPeriods(time.Now())
+	day, month, _ := ledgerPeriods(nowFunc())
 	add := func(l *usageLedger) bool {
 		l.PromptTokens += promptTokens
 		l.OutputTokens += outputTokens
