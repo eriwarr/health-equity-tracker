@@ -1,7 +1,6 @@
 // Nightly-only: covers the three insight surfaces (card, contrast, report)
-// and the flag control. All tests arm the feature flag via URL param so they
-// work on any environment — including prod, where VITE_SHOW_INSIGHT_GENERATION
-// is never set in the env file. The flag control test is skipped on prod
+// and the flag control. Insights are unconditional since the gate came out, so
+// these run on every environment as-is. The flag control test is skipped on prod
 // because flagging deletes the cached key and writes to the flagged bucket.
 import { expect, test } from './utils/fixtures'
 
@@ -9,13 +8,13 @@ const IS_PROD =
   process.env.E2E_BASE_URL?.includes('healthequitytracker.org') ?? false
 
 const DISPARITY_URL =
-  '/exploredata?mls=1.incarceration-3.00&group1=All&mlp=disparity&dt1=prison&VITE_SHOW_INSIGHT_GENERATION=1'
+  '/exploredata?mls=1.incarceration-3.00&group1=All&mlp=disparity&dt1=prison'
 
 const COMPARE_URL =
-  '/exploredata?mls=1.incarceration-3.poverty-5.00&group1=All&mlp=comparevars&dt1=prison&VITE_SHOW_INSIGHT_GENERATION=1'
+  '/exploredata?mls=1.incarceration-3.poverty-5.00&group1=All&mlp=comparevars&dt1=prison'
 
 const REPORT_URL =
-  '/exploredata?mls=1.incarceration-3.00&group1=All&mlp=disparity&dt1=prison&report-insight=true&VITE_SHOW_INSIGHT_GENERATION=1'
+  '/exploredata?mls=1.incarceration-3.00&group1=All&mlp=disparity&dt1=prison&report-insight=true'
 
 // --- Card insight ---
 
